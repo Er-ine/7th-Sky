@@ -19,6 +19,7 @@
   --accent-pink: #e83e8c;
   --accent-spectrum: linear-gradient(105deg, var(--accent-gold), var(--accent-saffron) 52%, var(--accent-coral));
   --cream: #faf6ef;
+  --text-main: #1a1410;
   --paper: var(--bg-base);
   --white: var(--bg-surface);
   --ink: var(--cream);
@@ -931,6 +932,160 @@ td strong { color: var(--ink); }
   .edge-glow, .edge-art, .edge-dot, .brand-marquee-track, .nav-cart.cart-wiggle, .dish-card,
   .order-burst, .burst-spark { animation: none !important; }
   .brand-marquee-track { transform: none; }
+}
+
+.dish-title-row strong {
+  color: var(--text-main);
+  font-size: 17px;
+  font-weight: 700;
+}
+.signature-overlay > span:last-child {
+  color: var(--cream);
+  font-size: 19px;
+  font-weight: 700;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, .7);
+}
+.signature-small > div > span:last-child {
+  color: var(--cream);
+  font-size: 17px;
+  font-weight: 700;
+}
+.cart-item-name > span { color: #e8dfd1; font-size: 15px; font-weight: 500; }
+.line-total { color: #f0c66f; font-size: 18px; font-weight: 700; }
+.floating-cart > strong { color: #f0c66f; font-size: 19px; font-weight: 700; }
+.summary-line strong, .summary-total strong,
+.checkout-summary .summary-line strong, .checkout-summary .summary-total strong,
+.confirmation-items p > span, .confirmation-total strong,
+.owner-dish-details span {
+  font-size: 16px;
+  font-weight: 700;
+}
+.dish-info > p, .cart-item-name > span, .summary-line > span,
+.confirmation-items p, .owner-dish-details span {
+  line-height: 1.6;
+}
+
+.menu-page.has-cart-summary { padding-bottom: 44px; }
+.menu-page.has-cart-summary > .floating-cart {
+  position: sticky;
+  right: auto;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: auto;
+  width: min(92%, 720px);
+  margin: 30px auto max(18px, env(safe-area-inset-bottom));
+  transform: none;
+}
+
+.page-shell.checkout-page { background: var(--bg-base); }
+.checkout-page::before { display: none; }
+.page-shell.checkout-page .checkout-form {
+  border-color: rgba(212, 162, 76, .52);
+  color: var(--text-main);
+  background: #faf6ef;
+}
+.checkout-form .checkout-section-heading h2 { color: var(--text-main); }
+.checkout-form .checkout-section-heading .eyebrow { color: #735710; }
+.checkout-form .form-field,
+.checkout-form .payment-methods legend { color: var(--text-main); }
+.checkout-form .optional { color: #51483d; }
+.checkout-form .form-field input,
+.checkout-form .form-field textarea,
+.checkout-form .form-field select {
+  border-color: #b9a880;
+  color: var(--text-main);
+  background: #fffdf8;
+}
+.checkout-form .form-field input::placeholder,
+.checkout-form .form-field textarea::placeholder { color: #625a4f; opacity: 1; }
+.checkout-form .payment-method-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.checkout-form .payment-method-card {
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid #c8b98f;
+  border-radius: 10px;
+  color: var(--text-main);
+  background: #fffdf8;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+.checkout-form .payment-method-card:hover { border-color: var(--accent-gold); }
+.checkout-form .payment-method-card.active {
+  border: 2px solid #8a6a22;
+  color: var(--text-main);
+  background: #fffaf0;
+  box-shadow: 0 0 0 2px rgba(212, 162, 76, .14);
+}
+.checkout-form .payment-fields {
+  padding: 18px;
+  border: 1px solid rgba(138, 106, 34, .3);
+  border-radius: 12px;
+  color: var(--text-main);
+  background: #fffdf8;
+  box-shadow: none;
+}
+.checkout-form .payment-fields .form-field { color: var(--text-main); }
+.checkout-form .form-field input:focus,
+.checkout-form .form-field textarea:focus {
+  border-color: #8a6a22;
+  box-shadow: 0 0 0 3px rgba(212, 162, 76, .2);
+}
+.checkout-form .field-error { color: #8a261d; }
+.upi-app-labels { display: flex; flex-wrap: wrap; gap: 9px; margin: 4px 0 2px; }
+.upi-app-labels span {
+  padding: 7px 10px;
+  border: 1px solid rgba(138, 106, 34, .28);
+  border-radius: 999px;
+  color: #393128;
+  background: #faf6ef;
+  font-size: 12px;
+  font-weight: 600;
+}
+.qr-payment-panel {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(138, 106, 34, .3);
+  border-radius: 12px;
+  color: var(--text-main);
+  background: #fffdf8;
+}
+.payment-qr-graphic { width: 112px; height: 112px; flex: 0 0 auto; padding: 7px; border: 1px solid #d5c8a9; border-radius: 6px; background: #fffdf8; }
+.qr-payment-panel > div { display: flex; flex-direction: column; gap: 7px; }
+.qr-payment-panel strong { color: var(--text-main); font-size: 20px; font-weight: 700; }
+.qr-payment-panel span { color: #393128; font-size: 14px; }
+.checkout-form .button-pay {
+  min-height: 54px;
+  color: #fffdf8;
+  background: #174b3b;
+  box-shadow: 0 8px 20px rgba(23, 75, 59, .2);
+  font-size: 16px;
+  font-weight: 700;
+}
+.checkout-form .button-pay:hover { color: #fffdf8; background: #103c2f; box-shadow: 0 10px 24px rgba(23, 75, 59, .28); }
+.checkout-form .button-pay:disabled { opacity: .7; cursor: wait; }
+.checkout-summary .summary-total strong,
+.checkout-summary .summary-line strong { color: #f0c66f; }
+
+@media (max-width: 760px) {
+  .floating-cart {
+    width: min(92%, 720px);
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+  .checkout-form .payment-method-options { gap: 6px; }
+  .checkout-form .payment-method-card { padding: 8px 5px; font-size: 11px; }
+  .checkout-form .payment-fields { padding: 13px; }
+  .payment-field-row { grid-template-columns: 1fr 1fr; }
+  .payment-qr-graphic { width: 96px; height: 96px; }
   .reveal-on-scroll { opacity: 1; transform: none; }
 }
 
@@ -1362,4 +1517,19 @@ main.page-shell { animation: page-enter .35s ease both; }
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }
   .dish-card, .dish-image-wrap img, .orders-table tbody tr, .site-header { transition: none; }
+}
+
+.menu-page .dish-title-row > strong {
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: #000000 !important;
+  background: #faf6ef !important;
+  background-image: none !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+  -webkit-text-fill-color: #000000 !important;
+  mix-blend-mode: normal !important;
+  opacity: 1 !important;
+  font-size: 17px;
+  font-weight: 700;
 }

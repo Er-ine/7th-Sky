@@ -27,6 +27,14 @@ function paymentStatusForOrderType(orderType) {
   return orderType === 'dine-in' ? 'Not Paid' : 'Paid';
 }
 
+function paymentMethodLabel(method, orderType) {
+  if (orderType === 'dine-in') return 'Pay at restaurant';
+  if (method === 'card') return 'Credit / Debit Card';
+  if (method === 'upi') return 'UPI';
+  if (method === 'qr') return 'Scan QR';
+  return 'In-app payment';
+}
+
 function ArrowIcon({ direction = 'up-right' }) {
   const paths = {
     'up-right': 'M6 18 18 6M7 6h11v11',
@@ -111,7 +119,7 @@ function orderTypeLabel(type) {
   return 'Takeaway';
 }
 
-function createOrderRecord({ items, subtotal, orderType, table = '', customerName, phone = '', deliveryAddress = '', instructions = '', checkoutAttemptId = '' }) {
+function createOrderRecord({ items, subtotal, orderType, table = '', customerName, phone = '', deliveryAddress = '', instructions = '', checkoutAttemptId = '', paymentMethod = '' }) {
   const id = `7S-${new Date().toISOString().slice(2, 10).replaceAll('-', '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   return {
     id,
@@ -127,7 +135,7 @@ function createOrderRecord({ items, subtotal, orderType, table = '', customerNam
     instructions,
     status: 'Placed',
     paymentStatus: paymentStatusForOrderType(orderType),
-    paymentMethod: orderType === 'dine-in' ? 'pay-at-restaurant' : 'in-app-payment',
+    paymentMethod: orderType === 'dine-in' ? 'pay-at-restaurant' : paymentMethod || 'in-app-payment',
     createdAt: new Date().toISOString(),
   };
 }
@@ -189,7 +197,9 @@ function migrateOrders(savedOrders) {
       table: order.orderType === 'dine-in' ? order.table : '',
       status,
       paymentStatus: paymentStatusForOrderType(order.orderType),
-      paymentMethod: order.orderType === 'dine-in' ? 'pay-at-restaurant' : 'in-app-payment',
+      paymentMethod: order.orderType === 'dine-in'
+        ? 'pay-at-restaurant'
+        : ['card', 'upi', 'qr'].includes(order.paymentMethod) ? order.paymentMethod : order.paymentMethod || 'in-app-payment',
     }];
   });
 }
@@ -732,7 +742,7 @@ function MenuPage({ menu, categories, cart, orderType, setQuantity, onAdd, table
   const itemCount = Object.values(cart).reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = Object.values(cart).reduce((sum, item) => sum + item.quantity * item.price, 0);
   return (
-    <main className="page-shell menu-page">
+    <main className={`page-shell menu-page${itemCount > 0 ? ' has-cart-summary' : ''}`}>
       <EdgeDecorations />
       <div className="menu-intro">
         <span className="eyebrow">A TASTE OF 7TH SKY</span>
@@ -890,6 +900,8 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart })
   const navigate = useNavigate();
   const started = sessionStorage.getItem('7sky-checkout-started') === 'yes';
   const [details, setDetails] = useState({ name: '', phone: '', address: '', instructions: '' });
+  const [paymentMethod, setPaymentMethod] = useState('card');
+  const [paymentDetails, setPaymentDetails] = useState({ cardholder: '', cardNumber: '', expiry: '', cvv: '', upiId: '' });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const submissionLock = useRef(false);
@@ -902,6 +914,18 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart })
     setDetails((current) => ({ ...current, [key]: value }));
     setErrors((current) => ({ ...current, [key]: '' }));
   };
+  const updatePaymentDetail = (key, value) => {
+    setPaymentDetails((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: '' }));
+  };
+  const updateCardNumber = (value) => {
+    const digits = value.replace(/\D/g, '').slice(0, 16);
+    updatePaymentDetail('cardNumber', digits.match(/.{1,4}/g)?.join(' ') || '');
+  };
+  const updateExpiry = (value) => {
+    const digits = value.replace(/\D/g, '').slice(0, 4);
+    updatePaymentDetail('expiry', digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits);
+  };
   const placeOrder = (event) => {
     event.preventDefault();
     if (submissionLock.current) return;
@@ -910,6 +934,15 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart })
     const phoneDigits = details.phone;
     if (!/^[6-9]\d{9}$/.test(phoneDigits)) nextErrors.phone = 'Enter a valid Indian mobile number: 10 digits starting with 6–9.';
     if (orderType === 'delivery' && !details.address.trim()) nextErrors.address = 'Please enter a delivery address.';
+    if (paymentMethod === 'card') {
+      if (!paymentDetails.cardholder.trim()) nextErrors.cardholder = 'Enter the name on the card.';
+      if (paymentDetails.cardNumber.replace(/\D/g, '').length !== 16) nextErrors.cardNumber = 'Enter a 16-digit card number.';
+      if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(paymentDetails.expiry)) nextErrors.expiry = 'Enter expiry as MM/YY.';
+      if (!/^\d{3,4}$/.test(paymentDetails.cvv)) nextErrors.cvv = 'Enter a 3- or 4-digit security code.';
+    }
+    if (paymentMethod === 'upi' && !/^[\w.-]+@[\w.-]+$/.test(paymentDetails.upiId.trim())) {
+      nextErrors.upiId = 'Enter a valid UPI ID, such as name@bank.';
+    }
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
       return;
@@ -936,6 +969,7 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart })
       deliveryAddress: orderType === 'delivery' ? details.address.trim() : '',
       instructions: details.instructions.trim(),
       checkoutAttemptId: attemptId,
+      paymentMethod,
     });
     window.setTimeout(() => {
       const savedOrders = migrateOrders(readStorage('7sky-orders', orders));
@@ -983,9 +1017,83 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart })
           </label>
           </section>
           <section className="checkout-section checkout-payment-section">
-          <div className="checkout-section-heading"><span className="eyebrow">02 · PAYMENT</span><h2>Confirm your payment</h2></div>
-          <p className="payment-availability-note">Completing this step marks your order as paid.</p>
-          <button className="button button-dark full-button" type="submit" disabled={submitting}>{submitting ? 'Placing order…' : `Place Order · ${formatRupees(subtotal)}`} <ArrowIcon /></button>
+          <div className="checkout-section-heading"><span className="eyebrow">02 · PAYMENT</span><h2>Choose a payment method</h2></div>
+          <div className="payment-method-options" role="radiogroup" aria-label="Payment method">
+            {[
+              ['card', 'Credit / Debit Card'],
+              ['upi', 'UPI'],
+              ['qr', 'Scan QR'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                className={`payment-method-card${paymentMethod === value ? ' active' : ''}`}
+                type="button"
+                role="radio"
+                aria-checked={paymentMethod === value}
+                aria-label={label}
+                data-payment-method={value}
+                tabIndex={paymentMethod === value ? 0 : -1}
+                onClick={() => {
+                  setPaymentMethod(value);
+                  setErrors({});
+                }}
+                onKeyDown={(event) => {
+                  if (!['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(event.key)) return;
+                  event.preventDefault();
+                  const methods = ['card', 'upi', 'qr'];
+                  const currentIndex = methods.indexOf(value);
+                  const offset = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+                  const nextMethod = methods[(currentIndex + offset + methods.length) % methods.length];
+                  setPaymentMethod(nextMethod);
+                  setErrors({});
+                  event.currentTarget.parentElement?.querySelector(`[data-payment-method="${nextMethod}"]`)?.focus();
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {paymentMethod === 'card' && (
+            <div className="payment-fields">
+              <label className="form-field">Cardholder name
+                <input autoComplete="cc-name" value={paymentDetails.cardholder} onChange={(event) => updatePaymentDetail('cardholder', event.target.value)} />
+                {errors.cardholder && <span className="field-error" role="alert">{errors.cardholder}</span>}
+              </label>
+              <label className="form-field">Card number
+                <input inputMode="numeric" autoComplete="cc-number" maxLength={19} value={paymentDetails.cardNumber} onChange={(event) => updateCardNumber(event.target.value)} placeholder="0000 0000 0000 0000" />
+                {errors.cardNumber && <span className="field-error" role="alert">{errors.cardNumber}</span>}
+              </label>
+              <div className="payment-field-row">
+                <label className="form-field">Expiry
+                  <input inputMode="numeric" autoComplete="cc-exp" maxLength={5} value={paymentDetails.expiry} onChange={(event) => updateExpiry(event.target.value)} placeholder="MM/YY" />
+                  {errors.expiry && <span className="field-error" role="alert">{errors.expiry}</span>}
+                </label>
+                <label className="form-field">CVV
+                  <input type="password" inputMode="numeric" autoComplete="cc-csc" maxLength={4} value={paymentDetails.cvv} onChange={(event) => updatePaymentDetail('cvv', event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="CVV" />
+                  {errors.cvv && <span className="field-error" role="alert">{errors.cvv}</span>}
+                </label>
+              </div>
+            </div>
+          )}
+          {paymentMethod === 'upi' && (
+            <div className="payment-fields">
+              <label className="form-field">UPI ID
+                <input autoComplete="off" value={paymentDetails.upiId} onChange={(event) => updatePaymentDetail('upiId', event.target.value.trim())} placeholder="name@bank" />
+                {errors.upiId && <span className="field-error" role="alert">{errors.upiId}</span>}
+              </label>
+              <div className="upi-app-labels" aria-label="Available UPI apps"><span>Google Pay</span><span>PhonePe</span><span>Paytm</span></div>
+            </div>
+          )}
+          {paymentMethod === 'qr' && (
+            <div className="qr-payment-panel">
+              <svg className="payment-qr-graphic" viewBox="0 0 29 29" role="img" aria-label="QR-code-style payment graphic" shapeRendering="crispEdges">
+                <rect width="29" height="29" rx="1" fill="#fffdf8" />
+                <path fill="#17130f" d="M2 2h7v7H2zm2 2v3h3V4zm16-2h7v7h-7zm2 2v3h3V4zM2 20h7v7H2zm2 2v3h3v-3zM12 2h2v2h-2zm3 0h2v4h-2zm-3 4h3v2h-3zm2 3h3v2h-3zm4 0h2v3h-2zm3 1h2v3h-2zm3-1h2v2h-2zM11 12h2v2h-2zm3 1h2v3h-2zm4 0h2v2h-2zm-7 3h3v2h-3zm5 1h2v3h-2zm3-2h3v2h-3zm4 1h2v3h-2zm-12 4h2v3h-2zm4 1h2v2h-2zm3 2h3v2h-3zm4-1h2v4h-2zm4-2h2v2h-2zm-13 5h2v1h-2zm5-1h2v2h-2z" />
+              </svg>
+              <div><strong>{formatRupees(subtotal)}</strong><span>Scan with any UPI app</span></div>
+            </div>
+          )}
+          <button className="button button-pay full-button" type="submit" disabled={submitting}>{submitting ? 'Completing payment…' : `Pay ${formatRupees(subtotal)}`}</button>
           </section>
         </form>
         <aside className="order-summary checkout-summary">
@@ -993,7 +1101,7 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart })
           {items.map((item) => <div className="summary-line" key={item.id}><span>{item.quantity} × {item.name}</span><strong>{formatRupees(item.quantity * item.price)}</strong></div>)}
           <div className="summary-line"><span>Order type</span><strong>{orderTypeLabel(orderType)}</strong></div>
           <div className="summary-total"><span>Order total</span><strong>{formatRupees(subtotal)}</strong></div>
-          <div className="payment-status-note"><span className="payment-status-dot" />Paid when you place your order</div>
+          <div className="payment-status-note"><span className="payment-status-dot" />Status updates to Paid when you pay</div>
         </aside>
       </div>
     </main>
@@ -1015,7 +1123,7 @@ function ConfirmationPage({ orders }) {
         <div className="confirmation-number"><span>ORDER NUMBER</span><strong>{order.orderNumber}</strong></div>
         <div className="confirmation-details">
           <div><span>Order type</span><strong>{orderTypeLabel(order.orderType)}{order.table ? ` · Table ${order.table}` : ''}</strong></div>
-          <div><span>Payment method</span><strong>{order.orderType === 'dine-in' ? 'Pay at restaurant' : 'In-app payment'}</strong></div>
+          <div><span>Payment method</span><strong>{paymentMethodLabel(order.paymentMethod, order.orderType)}</strong></div>
           <div><span>Payment status</span><strong>{paymentStatusForOrderType(order.orderType)}</strong></div>
           <div><span>Customer</span><strong>{order.customerName || 'Guest'}{order.phone && <><br />{order.phone}</>}</strong></div>
           <div><span>Order status</span><strong>{order.status}</strong></div>

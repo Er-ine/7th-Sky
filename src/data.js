@@ -1,5 +1,6 @@
 const menuPhoto = (name, extension = 'jpg') => `/images/menu/${name}.${extension}`;
 const restaurantPhoto = (name) => `/images/restaurant/${name}.jpg`;
+const restaurantAsset = (name) => `/images/restaurant/${name}`;
 const photoFallback = (name) => `/images/placeholders/${name}.jpg`;
 export const uploadedMenuImageReplacements = new Map([
   ['chicken-biriyani', {
@@ -123,25 +124,25 @@ export const initialCategories = ['Biriyani', 'Mandi'];
 
 export const heroSlides = [
   {
-    image: `${restaurantPhoto('hero-01')}.png`,
+    image: restaurantAsset('hero-01.jpg (3).png'),
     alt: 'The 7th Sky restaurant entrance illuminated at night',
     label: 'A little room for pleasure.',
     caption: 'An easy place to settle in and eat well.',
   },
   {
-    image: `${restaurantPhoto('hero-02')}.png`,
+    image: restaurantAsset('hero-02.jpg (3).png'),
     alt: 'A lit garden walkway leading to the restaurant',
     label: 'Stay for one more bite.',
     caption: 'A menu made for the moment you are in.',
   },
   {
-    image: `${restaurantPhoto('hero-03')}.png`,
+    image: restaurantAsset('hero-03.jpg (3).png'),
     alt: 'A warmly lit outdoor dining area at 7th Sky',
     label: 'Good things, gathered.',
     caption: 'Bring your appetite. We will take it from here.',
   },
   {
-    image: `${restaurantPhoto('hero-04')}.png`,
+    image: restaurantAsset('hero-04.jpg.png'),
     alt: 'A leafy garden dining nook at 7th Sky',
     label: 'Find your favourite corner.',
     caption: 'Settle in, take your time, and stay awhile.',

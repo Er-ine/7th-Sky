@@ -3,8 +3,8 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } fr
 import QRCode from 'qrcode';
 import { brandLogo, formatRupees, heroSlides, initialCategories, initialMenu, readStorage, uploadedMenuImageReplacements, writeStorage } from './data.js';
 
-const orderStatuses = ['New', 'Accepted', 'Preparing', 'Ready', 'Completed'];
-const demoUsers = {
+const orderStatuses = ['Placed', 'Preparing', 'Ready', 'Served/Delivered', 'Completed'];
+const staffAccounts = {
   kitchen: { password: 'kitchen123', role: 'kitchen' },
   owner: { password: 'owner123', role: 'owner' },
 };
@@ -23,6 +23,83 @@ const renamedMenuItems = new Map([
 ]);
 const maxTables = 50;
 
+function paymentStatusForOrderType(orderType) {
+  return orderType === 'dine-in' ? 'Not Paid' : 'Paid';
+}
+
+function ArrowIcon({ direction = 'up-right' }) {
+  const paths = {
+    'up-right': 'M6 18 18 6M7 6h11v11',
+    left: 'M19 12H5m0 0 7-7m-7 7 7 7',
+    right: 'M5 12h14m0 0-7-7m7 7-7 7',
+  };
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d={paths[direction]} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
+
+function ChevronIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 16 16" fill="none"><path d="m3 6 5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
+
+function CheckIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m5 12 4.5 4.5L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
+
+function SparkleIcon({ className = '' }) {
+  return <svg className={className} aria-hidden="true" viewBox="0 0 32 32" fill="none"><path d="M16 2.5 19.2 12.8 29.5 16l-10.3 3.2L16 29.5l-3.2-10.3L2.5 16l10.3-3.2L16 2.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>;
+}
+
+function PlateIcon() {
+  return <svg className="empty-cart-icon" aria-hidden="true" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="17" stroke="currentColor" strokeWidth="1.5" /><circle cx="24" cy="24" r="11" stroke="currentColor" strokeWidth="1.2" /><path d="M5 9v12m4-12v12M7 21v19m34-31-5 13h5v17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
+
+function HeadingAccent() {
+  return <svg className="heading-accent" aria-hidden="true" viewBox="0 0 72 12" fill="none"><path d="M2 8c8-6 13-6 20 0s12 6 19 0 12-6 20 0 8 4 9 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
+}
+
+function EdgeDecorations() {
+  return (
+    <div className="edge-decorations" aria-hidden="true">
+      <span className="edge-glow edge-glow-left" />
+      <span className="edge-glow edge-glow-right" />
+      <SparkleIcon className="edge-art edge-art-left" />
+      <svg className="edge-art edge-art-right edge-plate" viewBox="0 0 80 80" fill="none">
+        <circle cx="40" cy="40" r="29" stroke="currentColor" strokeWidth="1.2" />
+        <circle cx="40" cy="40" r="21" stroke="currentColor" strokeWidth="1" />
+        <path d="M40 11c5 12 5 46 0 58M11 40c12-5 46-5 58 0" stroke="currentColor" strokeWidth=".8" />
+      </svg>
+      <svg className="edge-art edge-art-right edge-leaf" viewBox="0 0 64 84" fill="none">
+        <path d="M52 5C16 9 4 27 9 48c4 18 23 25 36 13C59 48 59 22 52 5Z" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M11 67C23 48 35 33 51 9m-29 43 2-17m8 6 16-2m-30 25 19-4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+      </svg>
+      <svg className="edge-art edge-art-left edge-spiral" viewBox="0 0 72 72" fill="none">
+        <path d="M36 8c-15 0-27 12-27 27s12 27 27 27 27-12 27-27S51 8 36 8Zm0 10c9 0 17 8 17 17s-8 17-17 17-17-8-17-17 8-17 17-17Zm0 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+      <span className="edge-dot edge-dot-one" />
+      <span className="edge-dot edge-dot-two" />
+      <span className="edge-dot edge-dot-three" />
+    </div>
+  );
+}
+
+function BrandMarquee() {
+  const items = ['Fresh Biriyani', 'Royal Mandi', 'Made with love', 'Dine among the stars'];
+  return (
+    <div className="brand-marquee" aria-label={items.join(' · ')}>
+      <div className="brand-marquee-track">
+        {[0, 1].map((copy) => (
+          <div className="brand-marquee-group" key={copy} aria-hidden={copy === 1}>
+            {items.map((item) => <span className="brand-marquee-item" key={item}><span>{item}</span><svg aria-hidden="true" viewBox="0 0 8 8"><circle cx="4" cy="4" r="2" fill="currentColor" /></svg></span>)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OrderBurst() {
+  return <div className="order-burst" aria-hidden="true">{Array.from({ length: 8 }, (_, index) => <SparkleIcon key={index} className={`burst-spark burst-spark-${index + 1}`} />)}</div>;
+}
+
 function validTable(value, count) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 && parsed <= count ? String(parsed) : '';
@@ -34,26 +111,25 @@ function orderTypeLabel(type) {
   return 'Takeaway';
 }
 
-function paymentMethodLabel(method) {
-  if (method === 'upi') return 'UPI';
-  return 'Card';
-}
-
-function validDemoCardNumber(value) {
-  const digits = value.replace(/\D/g, '');
-  if (digits.length < 13 || digits.length > 19) return false;
-  let sum = 0;
-  let doubleDigit = false;
-  for (let index = digits.length - 1; index >= 0; index -= 1) {
-    let digit = Number(digits[index]);
-    if (doubleDigit) {
-      digit *= 2;
-      if (digit > 9) digit -= 9;
-    }
-    sum += digit;
-    doubleDigit = !doubleDigit;
-  }
-  return sum % 10 === 0;
+function createOrderRecord({ items, subtotal, orderType, table = '', customerName, phone = '', deliveryAddress = '', instructions = '', checkoutAttemptId = '' }) {
+  const id = `7S-${new Date().toISOString().slice(2, 10).replaceAll('-', '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  return {
+    id,
+    orderNumber: id,
+    checkoutAttemptId,
+    items: items.map((item) => ({ ...item })),
+    subtotal,
+    orderType,
+    table: orderType === 'dine-in' ? table : '',
+    customerName,
+    phone,
+    deliveryAddress,
+    instructions,
+    status: 'Placed',
+    paymentStatus: paymentStatusForOrderType(orderType),
+    paymentMethod: orderType === 'dine-in' ? 'pay-at-restaurant' : 'in-app-payment',
+    createdAt: new Date().toISOString(),
+  };
 }
 
 function migrateMenu(savedMenu, preserveDeletions = false) {
@@ -88,7 +164,7 @@ function migrateMenu(savedMenu, preserveDeletions = false) {
 function migrateOrders(savedOrders) {
   if (!Array.isArray(savedOrders)) return [];
   return savedOrders.flatMap((order) => {
-    if (!order || !Array.isArray(order.items) || !order.paymentStatus?.includes('simulated success')) return [];
+    if (!order || !Array.isArray(order.items)) return [];
     const items = order.items
       .filter((item) => item && !retiredMenuIds.has(item.id))
       .map((item) => {
@@ -103,11 +179,17 @@ function migrateOrders(savedOrders) {
         };
       });
     if (!items.length) return [];
+    const status = order.status === 'New' || order.status === 'Accepted' || !orderStatuses.includes(order.status)
+      ? 'Placed'
+      : order.status;
     return [{
       ...order,
       items,
       subtotal: items.reduce((total, item) => total + item.price * item.quantity, 0),
       table: order.orderType === 'dine-in' ? order.table : '',
+      status,
+      paymentStatus: paymentStatusForOrderType(order.orderType),
+      paymentMethod: order.orderType === 'dine-in' ? 'pay-at-restaurant' : 'in-app-payment',
     }];
   });
 }
@@ -128,7 +210,7 @@ function loadCart() {
   }));
 }
 
-function FoodImage({ src, fallbackSrc, alt, className = '', allowFallback = true }) {
+function FoodImage({ src, fallbackSrc, alt, className = '', allowFallback = true, ariaHidden = false }) {
   const [imageSrc, setImageSrc] = useState(src);
   useEffect(() => setImageSrc(src), [src]);
   const localFallback = fallbackSrc || (allowFallback && src?.startsWith('/images/restaurant/')
@@ -143,6 +225,7 @@ function FoodImage({ src, fallbackSrc, alt, className = '', allowFallback = true
       className={className}
       src={imageSrc}
       alt={alt}
+      aria-hidden={ariaHidden}
       loading={className.includes('hero-image') ? 'eager' : 'lazy'}
       fetchPriority={className.includes('hero-image') ? 'high' : 'auto'}
       onError={() => setImageSrc((current) => current === localFallback ? '' : localFallback)}
@@ -198,7 +281,15 @@ function App() {
   const menuCategories = initialCategories;
   const [user, setUser] = useState(() => readStorage('7sky-user', null));
   const [toast, setToast] = useState('');
+  const [cartPulse, setCartPulse] = useState(false);
   const toastTimeout = useRef(0);
+  const cartPulseTimeout = useRef(0);
+
+  useEffect(() => {
+    if (location.pathname === '/kitchen' || location.pathname === '/login/kitchen') document.title = 'The Kitchen | 7th Sky';
+    else if (location.pathname === '/owner' || location.pathname === '/login/owner') document.title = 'Owner Desk | 7th Sky';
+    else document.title = '7th Sky | Taste worth looking up for';
+  }, [location.pathname]);
 
   useEffect(() => writeStorage('7sky-cart', cart), [cart]);
   useEffect(() => writeStorage('7sky-order-type', orderType), [orderType]);
@@ -237,7 +328,7 @@ function App() {
         if (event.key === '7sky-orders' && event.newValue) setOrders(migrateOrders(JSON.parse(event.newValue)));
         if (event.key === '7sky-menu' && event.newValue) setMenu(migrateMenu(JSON.parse(event.newValue), true));
       } catch (error) {
-        console.error('Could not sync restaurant demo data from another tab.', error);
+        console.error('Could not sync restaurant data from another tab.', error);
       }
     };
     window.addEventListener('storage', sync);
@@ -256,7 +347,39 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'instant' });
     return undefined;
   }, [location.pathname, location.hash]);
-  useEffect(() => () => window.clearTimeout(toastTimeout.current), []);
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return undefined;
+    const elements = document.querySelectorAll([
+      '.story-section',
+      '.signature-section',
+      '.order-section',
+      '.menu-intro',
+      '.menu-toolbar',
+      '.menu-grid',
+      '.cart-page .page-heading',
+      '.cart-layout',
+      '.empty-cart',
+      '.checkout-page .page-heading',
+      '.checkout-layout',
+      '.confirmation-card',
+    ].join(', '));
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -24px 0px' });
+    elements.forEach((element) => {
+      element.classList.add('reveal-on-scroll');
+      observer.observe(element);
+    });
+    return () => observer.disconnect();
+  }, [location.pathname]);
+  useEffect(() => () => {
+    window.clearTimeout(toastTimeout.current);
+    window.clearTimeout(cartPulseTimeout.current);
+  }, []);
 
   const quantities = Object.values(cart);
   const itemCount = quantities.reduce((total, item) => total + item.quantity, 0);
@@ -286,16 +409,19 @@ function App() {
   const addToCart = (dish) => {
     setQuantity(dish, 1);
     showToast('Added to your order!');
+    window.clearTimeout(cartPulseTimeout.current);
+    setCartPulse(true);
+    cartPulseTimeout.current = window.setTimeout(() => setCartPulse(false), 520);
   };
   const logout = () => setUser(null);
   const isHome = location.pathname === '/';
   const isDashboard = location.pathname === '/kitchen' || location.pathname === '/owner';
   const isOperations = isDashboard || location.pathname === '/login/kitchen' || location.pathname === '/login/owner';
   const siteHeader = isHome
-    ? <HomeHeader itemCount={itemCount} user={user} onLogout={logout} table={table} />
+    ? <HomeHeader itemCount={itemCount} user={user} onLogout={logout} table={table} cartPulse={cartPulse} />
     : isOperations
       ? <DashboardHeader user={user} onLogout={logout} />
-      : <InnerPageHeader itemCount={itemCount} user={user} onLogout={logout} table={table} />;
+      : <InnerPageHeader itemCount={itemCount} user={user} onLogout={logout} table={table} cartPulse={cartPulse} />;
   const siteFooter = isHome ? <HomeFooter /> : isOperations ? null : <InnerPageFooter />;
 
   return (
@@ -327,6 +453,9 @@ function App() {
               itemCount={itemCount}
               subtotal={subtotal}
               orderType={orderType}
+              orders={orders}
+              setOrders={setOrders}
+              setCart={setCart}
               table={table}
               tableNotice={tableNotice}
               setQuantity={setQuantity}
@@ -344,7 +473,6 @@ function App() {
               orders={orders}
               setOrders={setOrders}
               setCart={setCart}
-              table={table}
             />
           }
         />
@@ -392,22 +520,21 @@ function DashboardHeader(props) {
   return (
     <header className={`operations-header operations-header-${role}`}>
       <div className="operations-header-inner">
-        <Link className="operations-brand" to={dashboardPath} aria-label={`7th Sky ${role} dashboard`}>
+        <Link className="operations-brand" to={dashboardPath} aria-label={role === 'owner' ? '7th Sky owner dashboard' : '7th Sky The Kitchen'}>
           <img className="brand-logo" src={brandLogo} alt="7th Sky" />
-          <span>{role === 'owner' ? 'OWNER DESK' : 'KITCHEN PASS'}</span>
+          <span>{role === 'owner' ? 'OWNER DESK' : 'THE KITCHEN'}</span>
         </Link>
         <div className="operations-heading">
           <span className="operations-indicator" />
-          <span>{role === 'owner' ? 'Owner dashboard' : 'Kitchen dashboard'}</span>
-          <small>LOCAL DEMO</small>
+          <span>{role === 'owner' ? 'Owner dashboard' : 'The Kitchen'}</span>
         </div>
-        {user ? <button className="operations-logout" onClick={onLogout}>Log out <span aria-hidden="true">↗</span></button> : <span className="operations-access">Team access</span>}
+        {user ? <button className="operations-logout" onClick={onLogout}>Log out <ArrowIcon /></button> : <span className="operations-access">Team access</span>}
       </div>
     </header>
   );
 }
 
-function Header({ itemCount, user, onLogout, table, variant }) {
+function Header({ itemCount, user, onLogout, table, variant, cartPulse }) {
   const [loginOpen, setLoginOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -430,22 +557,22 @@ function Header({ itemCount, user, onLogout, table, variant }) {
           <Link to="/">Home</Link>
           <Link to="/menu">Menu</Link>
           {variant === 'home' && <><Link to="/#story">Our story</Link><Link to="/#order">Order</Link></>}
-          <Link className="nav-cart" to="/cart">Cart <span>{itemCount}</span></Link>
+          <Link className={`nav-cart${cartPulse ? ' cart-wiggle' : ''}`} to="/cart">Cart <span>{itemCount}</span></Link>
         </nav>
         <div className="login-wrap">
           {user ? (
             <div className="signed-in">
-              <Link to={user.role === 'owner' ? '/owner' : '/kitchen'}>{user.role === 'owner' ? 'Owner desk' : 'Kitchen'}</Link>
+              <Link to={user.role === 'owner' ? '/owner' : '/kitchen'}>{user.role === 'owner' ? 'Owner desk' : 'The Kitchen'}</Link>
               <button className="login-button" onClick={onLogout}>Log out</button>
             </div>
           ) : (
             <>
-              <button className="login-button" onClick={() => setLoginOpen((open) => !open)} aria-expanded={loginOpen}>Login <span aria-hidden="true">⌄</span></button>
+              <button className="login-button" onClick={() => setLoginOpen((open) => !open)} aria-expanded={loginOpen}>Login <ChevronIcon /></button>
               {loginOpen && (
                 <div className="login-menu">
-                  <span className="eyebrow">DEMO TEAM ACCESS</span>
-                  <Link to="/login/kitchen">Kitchen login <span>↗</span></Link>
-                  <Link to="/login/owner">Owner login <span>↗</span></Link>
+                  <span className="eyebrow">TEAM ACCESS</span>
+                  <Link to="/login/kitchen">The Kitchen login <ArrowIcon /></Link>
+                  <Link to="/login/owner">Owner login <ArrowIcon /></Link>
                 </div>
               )}
             </>
@@ -458,35 +585,62 @@ function Header({ itemCount, user, onLogout, table, variant }) {
 
 function Home({ menu, onChoose, tableNotice }) {
   const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
     const interval = window.setInterval(() => setActive((current) => (current + 1) % heroSlides.length), 7000);
     return () => window.clearInterval(interval);
-  }, []);
-  const slide = heroSlides[active];
+  }, [active, paused]);
   const featuredDishes = menu.filter((dish) => dish.available).slice(0, 3);
   const storyDish = menu.find((dish) => dish.id === 'beef-mandi') || menu[0];
   const deliveryDish = menu.find((dish) => dish.id === 'chicken-biriyani') || menu[0];
   return (
-    <main>
-      <section className="hero">
-        <FoodImage key={slide.image} src={slide.image} alt={slide.alt} className={`hero-image hero-image-${active}`} allowFallback={false} />
+    <main className="homepage-main">
+      <EdgeDecorations />
+      <section
+        className="hero"
+        aria-label="7th Sky restaurant slideshow"
+        aria-roledescription="carousel"
+        tabIndex={0}
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocus={() => setPaused(true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            setActive((current) => (current + heroSlides.length - 1) % heroSlides.length);
+          } else if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            setActive((current) => (current + 1) % heroSlides.length);
+          }
+        }}
+      >
+        {heroSlides.map((item, index) => (
+          <FoodImage
+            key={item.image}
+            src={item.image}
+            alt={item.alt}
+            className={`hero-image${index === active ? ' is-active' : ''}`}
+            allowFallback={false}
+            ariaHidden={index !== active}
+          />
+        ))}
         <div className="hero-shade" />
+        <button className="hero-arrow hero-arrow-previous" onClick={() => setActive((current) => (current + heroSlides.length - 1) % heroSlides.length)} aria-label="Previous slide"><ArrowIcon direction="left" /></button>
+        <button className="hero-arrow hero-arrow-next" onClick={() => setActive((current) => (current + 1) % heroSlides.length)} aria-label="Next slide"><ArrowIcon direction="right" /></button>
         <div className="hero-copy">
-          <span className="hero-brand-name">7th Sky</span>
-          <span className="eyebrow light">A TABLE TO REMEMBER <i /> FOOD, FOR THE PLEASURE OF IT</span>
-          <h1 key={slide.label}>{slide.label}</h1>
-          <p>{slide.caption}</p>
-          <Link to="/menu" className="button button-light">Discover the menu <span>↗</span></Link>
+          <h1>Taste worth looking up for.</h1>
+          <Link to="/menu" className="button button-light">Discover the new menu <ArrowIcon /></Link>
         </div>
         <div className="hero-bottom">
           <span className="photo-disclosure">A GLIMPSE OF GOOD THINGS</span>
           <div className="slide-controls" aria-label="Slideshow controls">
-            <button onClick={() => setActive((active + heroSlides.length - 1) % heroSlides.length)} aria-label="Previous slide">←</button>
             <div className="slide-dots">
               {heroSlides.map((item, index) => <button key={item.image} className={index === active ? 'active' : ''} onClick={() => setActive(index)} aria-label={`Show slide ${index + 1}`} aria-current={index === active ? 'true' : undefined} />)}
             </div>
-            <button onClick={() => setActive((active + 1) % heroSlides.length)} aria-label="Next slide">→</button>
           </div>
         </div>
       </section>
@@ -497,8 +651,9 @@ function Home({ menu, onChoose, tableNotice }) {
         <div className="story-copy">
           <span className="eyebrow">A PLACE AT THE TABLE</span>
           <h2>Make an evening<br />of <em>something good.</em></h2>
+          <HeadingAccent />
           <p>At 7th Sky, biriyani, mandi and good company turn any meal into a moment worth savouring.</p>
-          <Link to="/menu" className="text-link">Take a look at the menu <span>↗</span></Link>
+          <Link to="/menu" className="text-link">Take a look at the menu <ArrowIcon /></Link>
         </div>
         <div className="story-visual">
           <FoodImage src={storyDish?.image} alt="Beef Mandi from the 7th Sky menu" className="story-photo" />
@@ -506,26 +661,26 @@ function Home({ menu, onChoose, tableNotice }) {
         </div>
       </section>
 
+      <BrandMarquee />
+
       <section className="signature-section" id="signature">
         <div className="section-wrap">
           <div className="signature-heading">
-            <div><span className="eyebrow">A FIRST LOOK</span><h2>Start with<br /><em>something lovely.</em></h2></div>
-            <Link to="/menu" className="text-link">The full sample menu <span>↗</span></Link>
+            <div><span className="eyebrow">A FIRST LOOK</span><h2>Start with<br /><em>something lovely.</em></h2><HeadingAccent /></div>
+            <Link to="/menu" className="text-link">The full menu <ArrowIcon /></Link>
           </div>
           <div className="signature-grid">
             {featuredDishes[0] && <article className="signature-feature">
-              <FoodImage src={featuredDishes[0].image} fallbackSrc={featuredDishes[0].imageFallback} alt={`${featuredDishes[0].name}; sample dish photography`} className="signature-image" />
-              <div className="signature-overlay"><span className="eyebrow light">{featuredDishes[0].category} · SAMPLE DISH</span><h3>{featuredDishes[0].name}</h3><span>{formatRupees(featuredDishes[0].price)}</span></div>
-              <span className="photo-caption">SAMPLE PHOTOGRAPHY</span>
+              <FoodImage src={featuredDishes[0].image} fallbackSrc={featuredDishes[0].imageFallback} alt={`Food photograph of ${featuredDishes[0].name}`} className="signature-image" />
+              <div className="signature-overlay"><span className="eyebrow light">{featuredDishes[0].category}</span><h3>{featuredDishes[0].name}</h3><span>{formatRupees(featuredDishes[0].price)}</span></div>
             </article>}
             <div className="signature-side">
               {featuredDishes.slice(1).map((dish) => <article className="signature-small" key={dish.id}>
-                <FoodImage src={dish.image} fallbackSrc={dish.imageFallback} alt={`${dish.name}; sample dish photography`} className="signature-small-image" />
-                <div><span className="eyebrow">{dish.category} · SAMPLE DISH</span><h3>{dish.name}</h3><span>{formatRupees(dish.price)}</span></div>
+                <FoodImage src={dish.image} fallbackSrc={dish.imageFallback} alt={`Food photograph of ${dish.name}`} className="signature-small-image" />
+                <div><span className="eyebrow">{dish.category}</span><h3>{dish.name}</h3><span>{formatRupees(dish.price)}</span></div>
               </article>)}
             </div>
           </div>
-          <p className="sample-note signature-note">Dish names, descriptions, prices and photographs are examples until the restaurant’s menu is supplied.</p>
         </div>
       </section>
 
@@ -534,6 +689,7 @@ function Home({ menu, onChoose, tableNotice }) {
           <div className="order-intro">
             <span className="eyebrow">MADE FOR YOUR KIND OF EVENING</span>
             <h2>Here or<br /><em>on the way.</em></h2>
+            <HeadingAccent />
             <p>Choose how you would like to order. You can change your mind later.</p>
           </div>
           <div className="order-options">
@@ -542,21 +698,21 @@ function Home({ menu, onChoose, tableNotice }) {
               <span className="order-number">01 · TAKE IT WITH YOU</span>
               <strong>Takeaway</strong>
               <span>Order ahead. Take the good part home.</span>
-              <i aria-hidden="true">↗</i>
+              <i aria-hidden="true"><ArrowIcon /></i>
             </button>
             <button className="order-card dinein-card" onClick={() => onChoose('dine-in')}>
               <FoodImage src={heroSlides[2].image} alt="" className="order-card-image" allowFallback={false} />
               <span className="order-number">02 · TAKE YOUR TIME</span>
               <strong>Dine in</strong>
               <span>Settle in. We’ll bring it to the table.</span>
-              <i aria-hidden="true">↗</i>
+              <i aria-hidden="true"><ArrowIcon /></i>
             </button>
             <button className="order-card delivery-card" onClick={() => onChoose('delivery')}>
               <FoodImage src={deliveryDish?.image} alt="" className="order-card-image" />
               <span className="order-number">03 · AT YOUR DOOR</span>
               <strong>Delivery</strong>
               <span>Bring a little 7th Sky to your table at home.</span>
-              <i aria-hidden="true">↗</i>
+              <i aria-hidden="true"><ArrowIcon /></i>
             </button>
           </div>
         </div>
@@ -577,29 +733,32 @@ function MenuPage({ menu, categories, cart, orderType, setQuantity, onAdd, table
   const subtotal = Object.values(cart).reduce((sum, item) => sum + item.quantity * item.price, 0);
   return (
     <main className="page-shell menu-page">
+      <EdgeDecorations />
       <div className="menu-intro">
         <span className="eyebrow">A TASTE OF 7TH SKY</span>
         <h1>Made for<br /><em>moments worth savouring.</em></h1>
+        <HeadingAccent />
         <p>Settle in with fragrant biriyani, slow-cooked mandi and a little something to remember.</p>
-        <span className="sample-pill">ILLUSTRATIVE MENU · PRICES IN ₹</span>
+        <span className="menu-price-note">OUR MENU · PRICES IN ₹</span>
       </div>
       <div className="menu-toolbar">
         <div className="category-list" role="group" aria-label="Filter menu category">
           {['All', ...categories].map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}
         </div>
-        <label className="search-field"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find something lovely" aria-label="Search menu" /></label>
+        <label className="search-field"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" strokeWidth="1.6" /><path d="m16 16 5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find something lovely" aria-label="Search menu" /></label>
       </div>
       {orderType && <div className="order-type-note"><span>YOUR ORDER</span> {orderType === 'dine-in' ? (table ? `Dining at Table ${table}` : 'Dine in · scan your table QR') : orderType === 'delivery' ? 'Delivery' : 'Takeaway'} <Link to="/">Change</Link></div>}
       {tableNotice && !table && <p className="table-notice" role="status">{tableNotice}</p>}
       {orderType === 'dine-in' && !table && <p className="table-notice">Scan the QR code at your table to continue. Table numbers are detected automatically.</p>}
-      {toast && <div className="order-toast" role="status"><span aria-hidden="true">✓</span>{toast}</div>}
+      {toast && <div className="order-toast" role="status"><span className="toast-check"><CheckIcon /></span>{toast}</div>}
       {filtered.length ? (
         <div className="menu-grid">
-          {filtered.map((dish) => (
+          {filtered.map((dish, index) => (
             <article className={`dish-card ${!dish.available ? 'unavailable' : ''}`} key={dish.id}>
               <div className="dish-image-wrap">
                 <FoodImage src={dish.image} alt={`Food photo for ${dish.name}`} className="dish-image" />
                 {dish.tag && <span className="dish-tag">{dish.tag}</span>}
+                {dish.available && index < 2 && <span className="dish-ribbon">{index === 0 ? 'Chef’s pick' : 'Bestseller'}</span>}
                 {!dish.available && <span className="sold-out">BACK SOON</span>}
               </div>
               <div className="dish-info">
@@ -610,14 +769,14 @@ function MenuPage({ menu, categories, cart, orderType, setQuantity, onAdd, table
                   {cart[dish.id] ? (
                     <QuantityControl quantity={cart[dish.id].quantity} onChange={(quantity) => setQuantity(dish, quantity)} label={`${dish.name} quantity`} />
                   ) : (
-                    <button className="add-button" disabled={!dish.available} onClick={() => onAdd(dish)}>{dish.available ? 'Add to order' : 'Unavailable'} <span>+</span></button>
+                    <button className="add-button" disabled={!dish.available} onClick={() => onAdd(dish)}>{dish.available ? 'Add to order' : 'Unavailable'} <span aria-hidden="true">+</span></button>
                   )}
                 </div>
               </div>
             </article>
           ))}
         </div>
-      ) : <div className="empty-search"><span>✳</span><h2>Nothing on this plate.</h2><p>Try a different search or category.</p></div>}
+      ) : <div className="empty-search"><SparkleIcon className="empty-search-mark" /><h2>Nothing on this plate.</h2><p>Try a different search or category.</p></div>}
       {itemCount > 0 && (
         <div className="floating-cart">
           <div>
@@ -625,7 +784,7 @@ function MenuPage({ menu, categories, cart, orderType, setQuantity, onAdd, table
             <span className="floating-cart-copy"><strong>Your order</strong><small>{itemCount} {itemCount === 1 ? 'item' : 'items'}</small></span>
           </div>
           <strong>{formatRupees(subtotal)}</strong>
-          <Link className="button button-dark" to="/cart">See cart <span>↗</span></Link>
+          <Link className="button button-dark" to="/cart">See cart <ArrowIcon /></Link>
         </div>
       )}
     </main>
@@ -642,7 +801,7 @@ function QuantityControl({ quantity, onChange, label }) {
   );
 }
 
-function CartPage({ cart, itemCount, subtotal, orderType, table, tableNotice, setQuantity, onMissingTable }) {
+function CartPage({ cart, itemCount, subtotal, orderType, orders, setOrders, setCart, table, tableNotice, setQuantity, onMissingTable }) {
   const navigate = useNavigate();
   const items = Object.values(cart);
   const proceed = () => {
@@ -655,6 +814,24 @@ function CartPage({ cart, itemCount, subtotal, orderType, table, tableNotice, se
       onMissingTable('Scan the QR code at your table to attach its number to your order.');
       return;
     }
+    if (orderType === 'dine-in') {
+      const savedOrders = migrateOrders(orders);
+      const order = createOrderRecord({
+        items,
+        subtotal,
+        orderType,
+        table,
+        customerName: `Table ${table} guest`,
+      });
+      const nextOrders = [order, ...savedOrders];
+      writeStorage('7sky-orders', nextOrders);
+      setOrders(nextOrders);
+      setCart({});
+      sessionStorage.removeItem('7sky-checkout-started');
+      sessionStorage.removeItem('7sky-checkout-attempt');
+      navigate(`/confirmation/${encodeURIComponent(order.id)}`, { replace: true });
+      return;
+    }
     if (!sessionStorage.getItem('7sky-checkout-attempt')) {
       const attemptId = window.crypto?.randomUUID?.()
         || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -665,30 +842,32 @@ function CartPage({ cart, itemCount, subtotal, orderType, table, tableNotice, se
   };
   return (
     <main className="page-shell cart-page">
+      <EdgeDecorations />
       <div className="page-heading">
         <span className="eyebrow">YOUR GOOD THINGS</span>
         <h1>Your order<span>.</span></h1>
+        <HeadingAccent />
         {orderType && <p>Made for <strong>{orderType === 'dine-in' ? `Table ${table || 'QR required'}` : orderType}</strong> · {itemCount} {itemCount === 1 ? 'item' : 'items'}</p>}
       </div>
       {!items.length ? (
         <div className="empty-cart">
-          <span className="empty-cart-icon">✳</span>
+          <PlateIcon />
           <h2>Your order is empty.</h2>
           <p>Explore the menu and add a dish to get started.</p>
-          <Link className="button button-dark" to="/menu">Back to the menu <span>↗</span></Link>
+          <Link className="button button-dark" to="/menu">Back to the menu <ArrowIcon /></Link>
         </div>
       ) : (
         <div className="cart-layout">
           <section className="cart-items" aria-label="Cart items">
             {items.map((item) => (
               <article className="cart-row" key={item.id}>
-                <FoodImage src={item.image} alt={`${item.name}; sample food photography`} className="cart-thumb" />
+                <FoodImage src={item.image} alt={`Food photograph of ${item.name}`} className="cart-thumb" />
                 <div className="cart-item-name"><h2>{item.name}</h2><span>{formatRupees(item.price)} each</span><button className="text-button remove-button" onClick={() => setQuantity(item, 0)}>Remove</button></div>
                 <QuantityControl quantity={item.quantity} onChange={(quantity) => setQuantity(item, quantity)} label={`${item.name} quantity`} />
                 <strong className="line-total">{formatRupees(item.price * item.quantity)}</strong>
               </article>
             ))}
-            <Link to="/menu" className="continue-link">← Keep browsing</Link>
+            <Link to="/menu" className="continue-link"><ArrowIcon direction="left" />Keep browsing</Link>
           </section>
           <aside className="order-summary">
             <span className="eyebrow">A LITTLE RECAP</span>
@@ -696,11 +875,10 @@ function CartPage({ cart, itemCount, subtotal, orderType, table, tableNotice, se
             <div className="summary-line"><span>Subtotal · {itemCount} items</span><strong>{formatRupees(subtotal)}</strong></div>
             <div className="summary-line"><span>Taxes &amp; fees</span><span>Calculated at the restaurant</span></div>
             <div className="summary-total"><span>Total</span><strong>{formatRupees(subtotal)}</strong></div>
-            <p className="summary-note">Illustrative demo prices; taxes and service charges are not included.</p>
+            <p className="summary-note">Taxes and service charges are not included.</p>
             {tableNotice && <p className="table-notice" role="status">{tableNotice}</p>}
             {orderType === 'dine-in' && !table && <p className="table-notice">Scan your table QR before placing a dine-in order.</p>}
-            <button className="button button-dark full-button" onClick={proceed}>Place order <span>↗</span></button>
-            <p className="demo-caption">Payment is simulated in this local demo; no funds are transferred.</p>
+            <button className="button button-dark full-button" onClick={proceed}>{orderType === 'dine-in' ? 'Place Order' : 'Continue to payment'} <ArrowIcon /></button>
           </aside>
         </div>
       )}
@@ -708,26 +886,23 @@ function CartPage({ cart, itemCount, subtotal, orderType, table, tableNotice, se
   );
 }
 
-function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart, table }) {
+function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart }) {
   const navigate = useNavigate();
   const started = sessionStorage.getItem('7sky-checkout-started') === 'yes';
   const [details, setDetails] = useState({ name: '', phone: '', address: '', instructions: '' });
-  const [card, setCard] = useState({ name: '', number: '', expiry: '', cvv: '' });
-  const [payerUpi, setPayerUpi] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('card');
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const submissionLock = useRef(false);
   const items = Object.values(cart);
   useEffect(() => {
-    if (!submissionLock.current && (!started || !items.length || !orderType || (orderType === 'dine-in' && !table))) navigate('/cart', { replace: true });
-  }, [started, items.length, orderType, table, navigate]);
+    if (!submissionLock.current && (!started || !items.length || !['takeaway', 'delivery'].includes(orderType))) navigate('/cart', { replace: true });
+  }, [started, items.length, orderType, navigate]);
 
   const update = (key, value) => {
     setDetails((current) => ({ ...current, [key]: value }));
     setErrors((current) => ({ ...current, [key]: '' }));
   };
-  const submitDemoPayment = (event) => {
+  const placeOrder = (event) => {
     event.preventDefault();
     if (submissionLock.current) return;
     const nextErrors = {};
@@ -735,17 +910,6 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart, t
     const phoneDigits = details.phone;
     if (!/^[6-9]\d{9}$/.test(phoneDigits)) nextErrors.phone = 'Enter a valid Indian mobile number: 10 digits starting with 6–9.';
     if (orderType === 'delivery' && !details.address.trim()) nextErrors.address = 'Please enter a delivery address.';
-    if (paymentMethod === 'qr') nextErrors.payment = 'QR payment is unavailable until a verified payment gateway is connected.';
-    if (paymentMethod === 'card') {
-      if (!card.name.trim()) nextErrors.cardName = 'Enter the demo cardholder name.';
-      if (!validDemoCardNumber(card.number)) nextErrors.cardNumber = 'Enter a valid demo card number.';
-      const [month, year] = card.expiry.split('/').map(Number);
-      if (!month || month > 12 || !year || new Date(2000 + year, month, 0) < new Date()) nextErrors.expiry = 'Enter a valid future expiry date.';
-      if (!/^\d{3,4}$/.test(card.cvv)) nextErrors.cvv = 'Enter a 3 or 4 digit demo security code.';
-    }
-    if (paymentMethod === 'upi' && !/^[\w.-]+@[\w.-]+$/.test(payerUpi.trim())) {
-      nextErrors.upi = 'Enter a demo UPI ID such as guest@demo.';
-    }
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
       return;
@@ -763,24 +927,16 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart, t
       navigate(`/confirmation/${encodeURIComponent(previouslyCompletedOrder.id)}`, { replace: true });
       return;
     }
-    const id = `7S-${new Date().toISOString().slice(2, 10).replaceAll('-', '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-    const order = {
-      id,
-      orderNumber: id,
-      checkoutAttemptId: attemptId,
-      items: items.map((item) => ({ ...item })),
+    const order = createOrderRecord({
+      items,
       subtotal,
       orderType,
-      table: orderType === 'dine-in' ? table : '',
       customerName: details.name.trim(),
       phone: phoneDigits,
       deliveryAddress: orderType === 'delivery' ? details.address.trim() : '',
       instructions: details.instructions.trim(),
-      status: 'New',
-      paymentStatus: 'Demo simulated success — not processed',
-      paymentMethod,
-      createdAt: new Date().toISOString(),
-    };
+      checkoutAttemptId: attemptId,
+    });
     window.setTimeout(() => {
       const savedOrders = migrateOrders(readStorage('7sky-orders', orders));
       const duplicate = savedOrders.find((savedOrder) => savedOrder.checkoutAttemptId === attemptId);
@@ -788,30 +944,27 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart, t
       writeStorage('7sky-orders', nextOrders);
       setOrders(nextOrders);
       setCart({});
-      setCard({ name: '', number: '', expiry: '', cvv: '' });
-      setPayerUpi('');
       sessionStorage.removeItem('7sky-checkout-started');
       sessionStorage.removeItem('7sky-checkout-attempt');
-      navigate(`/confirmation/${encodeURIComponent(duplicate?.id || id)}`, { replace: true });
+      navigate(`/confirmation/${encodeURIComponent(duplicate?.id || order.id)}`, { replace: true });
     }, 350);
   };
-  if (!started || !items.length || !orderType || (orderType === 'dine-in' && !table)) return null;
+  if (!started || !items.length || !['takeaway', 'delivery'].includes(orderType)) return null;
 
   return (
     <main className="page-shell checkout-page">
       <div className="page-heading">
-        <span className="eyebrow">CHECKOUT · DEMO PAYMENT</span>
+        <span className="eyebrow">CHECKOUT · ORDER PLACEMENT</span>
         <h1>Complete your <em>order.</em></h1>
-        <p>Review your details and choose how to complete this simulated payment.</p>
+        <HeadingAccent />
+        <p>Review your details before placing your order.</p>
       </div>
       <div className="checkout-layout">
-        <form className="checkout-form" onSubmit={submitDemoPayment} noValidate>
-          <div className="payment-demo-banner"><strong>DEMO PAYMENT MODE</strong><span>Payments are simulated. No funds move and no payment details are sent or saved.</span></div>
+        <form className="checkout-form" onSubmit={placeOrder} noValidate>
           <section className="checkout-section checkout-customer-section">
           <div className="checkout-section-heading"><span className="eyebrow">01 · CUSTOMER DETAILS</span><h2>Who is this order for?</h2></div>
           <div className="checkout-order-context">
             <div><span>Order type</span><strong>{orderTypeLabel(orderType)}</strong></div>
-            {orderType === 'dine-in' && <div><span>Table</span><strong>{table}</strong></div>}
           </div>
           <label className="form-field">Name
             <input value={details.name} onChange={(event) => update('name', event.target.value)} autoComplete="name" />
@@ -825,53 +978,22 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart, t
             <textarea rows="2" value={details.address} onChange={(event) => update('address', event.target.value)} autoComplete="street-address" />
             {errors.address && <span className="field-error">{errors.address}</span>}
           </label>}
-          {orderType === 'dine-in' && <p className="table-notice">Dining at Table {table} · detected from your table QR code.</p>}
           <label className="form-field">A note for the kitchen <span className="optional">(optional)</span>
             <textarea rows="3" maxLength="300" value={details.instructions} onChange={(event) => update('instructions', event.target.value)} placeholder="Allergies or anything we should know" />
           </label>
           </section>
           <section className="checkout-section checkout-payment-section">
-          <div className="checkout-section-heading"><span className="eyebrow">02 · PAYMENT</span><h2>Choose a payment method</h2><p>Demo only: never enter real card or banking details.</p></div>
-          <fieldset className="payment-methods">
-            <legend>Payment method</legend>
-            <div className="payment-method-options">
-              {[
-                ['card', 'Card / debit'],
-                ['upi', 'UPI'],
-                ['qr', 'QR code'],
-              ].map(([value, label]) => <button key={value} type="button" className={paymentMethod === value ? 'active' : ''} aria-pressed={paymentMethod === value} onClick={() => { setPaymentMethod(value); setErrors({}); }}>{label}</button>)}
-            </div>
-          </fieldset>
-          {paymentMethod === 'card' && <section className="payment-fields" aria-label="Demo card details">
-            <p className="payment-help">Demo only: use a fictitious card such as 4242 4242 4242 4242, Demo Guest, 12/30, 123. Never enter real card details.</p>
-            <label className="form-field">Cardholder name<input autoComplete="off" value={card.name} onChange={(event) => setCard({ ...card, name: event.target.value })} placeholder="Demo Guest" />{errors.cardName && <span className="field-error">{errors.cardName}</span>}</label>
-            <label className="form-field">Card number<input inputMode="numeric" autoComplete="off" value={card.number} onChange={(event) => setCard({ ...card, number: event.target.value.replace(/\D/g, '').slice(0, 19).replace(/(.{4})/g, '$1 ').trim() })} placeholder="0000 0000 0000 0000" />{errors.cardNumber && <span className="field-error">{errors.cardNumber}</span>}</label>
-            <div className="payment-field-row">
-              <label className="form-field">Expiry<input inputMode="numeric" autoComplete="off" value={card.expiry} onChange={(event) => { const digits = event.target.value.replace(/\D/g, '').slice(0, 4); setCard({ ...card, expiry: digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits }); }} placeholder="MM/YY" />{errors.expiry && <span className="field-error">{errors.expiry}</span>}</label>
-              <label className="form-field">CVV<input type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={card.cvv} onChange={(event) => setCard({ ...card, cvv: event.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="123" />{errors.cvv && <span className="field-error">{errors.cvv}</span>}</label>
-            </div>
-          </section>}
-          {paymentMethod === 'upi' && <section className="payment-fields" aria-label="Demo UPI details">
-            <p className="payment-help">Enter a fictitious payer ID for the demo. This does not open a UPI app or transfer money.</p>
-            <label className="form-field">Demo UPI ID<input autoComplete="off" value={payerUpi} onChange={(event) => setPayerUpi(event.target.value)} placeholder="guest@demo" />{errors.upi && <span className="field-error">{errors.upi}</span>}</label>
-          </section>}
-          {paymentMethod === 'qr' && <section className="payment-qr-notice" aria-label="QR payment availability">
-            <strong>QR payments are not configured</strong>
-            <p>A verified payment gateway is required to create a payable QR request. This demo will not show a decorative or non-functional payment QR.</p>
-          </section>}
-          {errors.payment && <p className="form-error" role="alert">{errors.payment}</p>}
-          <button className="button button-dark full-button" type="submit" disabled={submitting || paymentMethod === 'qr'}>{submitting ? 'Simulating payment…' : `Simulate payment · ${formatRupees(subtotal)}`} <span>↗</span></button>
-          <p className="demo-caption">This clearly labelled simulation is not a real payment. No card or UPI details are stored.</p>
+          <div className="checkout-section-heading"><span className="eyebrow">02 · PAYMENT</span><h2>Confirm your payment</h2></div>
+          <p className="payment-availability-note">Completing this step marks your order as paid.</p>
+          <button className="button button-dark full-button" type="submit" disabled={submitting}>{submitting ? 'Placing order…' : `Place Order · ${formatRupees(subtotal)}`} <ArrowIcon /></button>
           </section>
         </form>
         <aside className="order-summary checkout-summary">
           <span className="eyebrow">ORDER REVIEW</span><h2>Your order</h2>
           {items.map((item) => <div className="summary-line" key={item.id}><span>{item.quantity} × {item.name}</span><strong>{formatRupees(item.quantity * item.price)}</strong></div>)}
           <div className="summary-line"><span>Order type</span><strong>{orderTypeLabel(orderType)}</strong></div>
-          {orderType === 'dine-in' && <div className="summary-line"><span>Table</span><strong>{table}</strong></div>}
-          <div className="summary-total"><span>Total payable · demo</span><strong>{formatRupees(subtotal)}</strong></div>
-          <p className="demo-caption">Illustrative demo prices only. No funds are transferred.</p>
-          <div className="payment-status-note"><span className="payment-status-dot" />Demo payment status: simulated only</div>
+          <div className="summary-total"><span>Order total</span><strong>{formatRupees(subtotal)}</strong></div>
+          <div className="payment-status-note"><span className="payment-status-dot" />Paid when you place your order</div>
         </aside>
       </div>
     </main>
@@ -885,23 +1007,24 @@ function ConfirmationPage({ orders }) {
   return (
     <main className="page-shell confirmation-page">
       <div className="confirmation-card">
-        <span className="confirmation-success-icon" role="img" aria-label="Success">✓</span>
-        <span className="eyebrow">DEMO PAYMENT SUCCESS · ORDER SENT</span>
-        <h1>Payment <em>Successful</em></h1>
-        <p className="confirmation-subtitle">Your demo payment is complete. Your order has been saved and sent to the kitchen board in this browser.</p>
+        <div className="confirmation-success-icon"><OrderBurst /><CheckIcon /></div>
+        <span className="eyebrow">ORDER PLACED</span>
+        <h1>Your order is <em>saved.</em></h1>
+        <HeadingAccent />
+        <p className="confirmation-subtitle">Your order is saved on this device. The restaurant cannot see it online yet.</p>
         <div className="confirmation-number"><span>ORDER NUMBER</span><strong>{order.orderNumber}</strong></div>
         <div className="confirmation-details">
           <div><span>Order type</span><strong>{orderTypeLabel(order.orderType)}{order.table ? ` · Table ${order.table}` : ''}</strong></div>
-          <div><span>Payment method</span><strong>{paymentMethodLabel(order.paymentMethod)}</strong></div>
-          <div><span>Payment status</span><strong>Simulated demo payment · not charged</strong></div>
-          <div><span>Customer</span><strong>{order.customerName}<br />{order.phone}</strong></div>
-          <div><span>Order status</span><strong>{order.status} · sent to kitchen</strong></div>
+          <div><span>Payment method</span><strong>{order.orderType === 'dine-in' ? 'Pay at restaurant' : 'In-app payment'}</strong></div>
+          <div><span>Payment status</span><strong>{paymentStatusForOrderType(order.orderType)}</strong></div>
+          <div><span>Customer</span><strong>{order.customerName || 'Guest'}{order.phone && <><br />{order.phone}</>}</strong></div>
+          <div><span>Order status</span><strong>{order.status}</strong></div>
           {order.deliveryAddress && <div className="confirmation-delivery-address"><span>Delivery address</span><strong>{order.deliveryAddress}</strong></div>}
         </div>
         <div className="confirmation-items">{order.items.map((item) => <p key={item.id}>{item.quantity} × {item.name}<span>{formatRupees(item.price * item.quantity)}</span></p>)}</div>
-        <div className="confirmation-total"><span>Demo total</span><strong>{formatRupees(order.subtotal)}</strong></div>
-        <p className="demo-caption">No real payment was taken. Orders are stored locally and will only appear on the kitchen dashboard in this browser.</p>
-        <Link to="/" className="button button-dark">Return to homepage <span>↗</span></Link>
+        <div className="confirmation-total"><span>Order total</span><strong>{formatRupees(order.subtotal)}</strong></div>
+        <p className="device-order-note">This order is saved on this device only.</p>
+        <Link to="/" className="button button-dark">Return to homepage <ArrowIcon /></Link>
       </div>
     </main>
   );
@@ -923,8 +1046,8 @@ function LoginPage({ setUser }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const validRole = role === 'owner' || role === 'kitchen';
-  const portalName = role === 'owner' ? 'Owner portal' : 'Kitchen portal';
-  const portalTitle = role === 'owner' ? 'A clearer view of your restaurant.' : 'Good service starts at the pass.';
+  const portalName = role === 'owner' ? 'Owner portal' : 'The Kitchen portal';
+  const portalTitle = role === 'owner' ? 'A clearer view of your restaurant.' : 'Service starts in The Kitchen.';
   const portalDescription = role === 'owner'
     ? 'Review orders, manage the menu and prepare your tables from one considered workspace.'
     : 'Keep new orders moving, coordinate preparation and make every service feel seamless.';
@@ -937,14 +1060,14 @@ function LoginPage({ setUser }) {
     event.preventDefault();
     setError('');
     if (!username.trim() || !password) {
-      setError('Enter your demo username and password.');
+      setError('Enter your username and password.');
       return;
     }
     setBusy(true);
     window.setTimeout(() => {
-      const account = demoUsers[username.trim().toLowerCase()];
+      const account = staffAccounts[username.trim().toLowerCase()];
       if (!account || account.password !== password || account.role !== role) {
-        setError(`Those details don’t match the ${role} demo login.`);
+        setError(`Those details don’t match the ${role} account.`);
         setBusy(false);
         return;
       }
@@ -960,7 +1083,7 @@ function LoginPage({ setUser }) {
           <span className="eyebrow">{portalName}</span>
           <h1>{portalTitle}</h1>
           <p>{portalDescription}</p>
-          <div className="login-portal-note"><span className="login-portal-dot" />{role === 'owner' ? 'Restaurant management' : 'Service operations'} · local demo</div>
+          <div className="login-portal-note"><span className="login-portal-dot" />{role === 'owner' ? 'Restaurant management' : 'Service operations'}</div>
         </aside>
         <section className="login-card">
           <span className="eyebrow">TEAM SIGN IN</span>
@@ -972,10 +1095,9 @@ function LoginPage({ setUser }) {
             <span className="password-wrap"><input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" /><button type="button" className="text-button" onClick={() => setShowPassword((show) => !show)}>{showPassword ? 'Hide' : 'Show'}</button></span>
           </label>
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="button button-dark full-button" disabled={busy}>{busy ? 'Checking…' : `Enter ${role} portal`} <span>↗</span></button>
+          <button className="button button-dark full-button" disabled={busy}>{busy ? 'Checking…' : `Enter ${role} portal`} <ArrowIcon /></button>
         </form>
-        <div className="credential-hint"><strong>Demo credentials</strong><span>{role} / {demoUsers[role].password}</span></div>
-        <p className="login-local-note">Demo access is stored in this browser; this is not secure authentication.</p>
+        <div className="credential-hint"><strong>Restaurant team access</strong><span>Contact your administrator for account details.</span></div>
         {notice && <span role="status">{notice}</span>}
         </section>
       </div>
@@ -984,59 +1106,58 @@ function LoginPage({ setUser }) {
 }
 
 function KitchenPage({ orders, setOrders }) {
-  const [filter, setFilter] = useState('Active');
+  const [filter, setFilter] = useState('All');
   const filtered = orders.filter((order) => filter === 'All' || (filter === 'Active' ? order.status !== 'Completed' : order.status === 'Completed'));
-  const updateStatus = (id, status) => setOrders((current) => current.map((order) => order.id === id ? { ...order, status } : order));
+  const updateStatus = (id, status) => {
+    const updatedOrders = orders.map((order) => order.id === id ? { ...order, status } : order);
+    writeStorage('7sky-orders', updatedOrders);
+    setOrders(updatedOrders);
+  };
   const activeOrders = orders.filter((order) => order.status !== 'Completed');
-  const newOrders = orders.filter((order) => order.status === 'New');
+  const newOrders = orders.filter((order) => order.status === 'Placed');
   const preparingOrders = orders.filter((order) => order.status === 'Preparing');
   const readyOrders = orders.filter((order) => order.status === 'Ready');
   return (
     <main className="page-shell dashboard-page kitchen-page">
       <div className="dashboard-heading">
-        <div><span className="eyebrow">SERVICE OVERVIEW</span><h1>The kitchen <em>pass.</em></h1><p>Paid demo orders are stored in this browser only. This board does not sync across devices.</p></div>
-        <span className="demo-pill">LOCAL DEMO · SAME BROWSER</span>
+        <div><span className="eyebrow">SERVICE OVERVIEW</span><h1>The <em>Kitchen.</em></h1><p>Orders saved on this device.</p></div>
+        <span className="device-pill">CURRENT DEVICE</span>
       </div>
       <section className="kitchen-stats" aria-label="Order status summary">
-        <div className="kitchen-stat kitchen-stat-new"><span>Needs attention</span><strong>{newOrders.length}</strong><small>New orders</small></div>
+        <div className="kitchen-stat kitchen-stat-new"><span>Needs attention</span><strong>{newOrders.length}</strong><small>Placed orders</small></div>
         <div className="kitchen-stat"><span>In preparation</span><strong>{preparingOrders.length}</strong><small>Being prepared</small></div>
         <div className="kitchen-stat"><span>Ready to serve</span><strong>{readyOrders.length}</strong><small>Awaiting collection</small></div>
         <div className="kitchen-stat"><span>Active orders</span><strong>{activeOrders.length}</strong><small>Not yet completed</small></div>
       </section>
       <div className="dashboard-toolbar kitchen-toolbar">
         <div className="tabs" role="tablist" aria-label="Filter kitchen orders">
-          {['Active', 'Completed', 'All'].map((item) => <button key={item} role="tab" aria-selected={filter === item} className={filter === item ? 'active' : ''} onClick={() => setFilter(item)}>{item === 'All' ? 'All orders' : item}</button>)}
+          {['All', 'Active', 'Completed'].map((item) => <button key={item} role="tab" aria-selected={filter === item} className={filter === item ? 'active' : ''} onClick={() => setFilter(item)}>{item === 'All' ? 'All orders' : item}</button>)}
         </div>
         <span>{filtered.length} {filtered.length === 1 ? 'order' : 'orders'}</span>
       </div>
-      {filtered.length ? <div className="kitchen-grid">{filtered.map((order) => <KitchenOrder key={order.id} order={order} onStatus={updateStatus} />)}</div> : <div className="dashboard-empty"><span>✳</span><h2>All caught up.</h2><p>There are no {filter.toLowerCase()} orders to show.</p></div>}
+      <OrdersTable orders={filtered} onStatusChange={updateStatus} />
     </main>
   );
 }
 
-function KitchenOrder({ order, onStatus }) {
-  const statusIndex = orderStatuses.indexOf(order.status);
-  const nextStatus = statusIndex >= 0 ? orderStatuses[statusIndex + 1] : undefined;
-  const nextAction = nextStatus
-    ? {
-      Accepted: 'Accept order',
-      Preparing: 'Start preparing',
-      Ready: 'Mark ready',
-      Completed: 'Complete order',
-    }[nextStatus]
-    : undefined;
+function OrdersTable({ orders, onStatusChange }) {
+  const sortedOrders = [...orders].sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt));
+  if (!sortedOrders.length) return <div className="dashboard-empty"><SparkleIcon className="dashboard-empty-mark" /><h2>No orders yet</h2></div>;
   return (
-    <article className={`kitchen-order ${order.status === 'New' ? 'kitchen-order-new' : ''}`}>
-      <div className="kitchen-order-top"><div><span className="eyebrow">{orderTypeLabel(order.orderType)}{order.table ? ` · Table ${order.table}` : ''}</span><h2>{order.orderNumber}</h2></div><span className={`status-badge status-${order.status.toLowerCase()}`}>{order.status}</span></div>
-      <div className="kitchen-meta"><strong>{order.customerName}</strong><span>{new Date(order.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
-      <div className="kitchen-contact"><span>Customer phone</span><a href={`tel:${order.phone}`}>{order.phone}</a></div>
-      {order.deliveryAddress && <div className="kitchen-instructions"><span>DELIVERY ADDRESS</span><p>{order.deliveryAddress}</p></div>}
-      <section className="kitchen-items" aria-label="Ordered items"><h3>Order items</h3>{order.items.map((item) => <p key={item.id}><strong>{item.quantity}×</strong> {item.name}</p>)}</section>
-      {order.instructions && <div className="kitchen-instructions"><span>NOTE FOR THE KITCHEN</span><p>{order.instructions}</p></div>}
-      <div className="kitchen-order-bottom"><div><span>PAYMENT STATUS</span><strong>{order.paymentStatus}</strong></div><label>UPDATE STATUS<select value={order.status} onChange={(event) => onStatus(order.id, event.target.value)}>{orderStatuses.map((status) => <option key={status}>{status}</option>)}</select></label></div>
-      <div className="kitchen-order-total"><span>Demo order total</span><strong>{formatRupees(order.subtotal)}</strong></div>
-      {nextStatus && <button className="button button-dark kitchen-next-action" onClick={() => onStatus(order.id, nextStatus)}>{nextAction}<span>→</span></button>}
-    </article>
+    <div className="order-table-card table-scroll">
+      <table className="orders-table">
+        <thead><tr><th>Order No.</th><th>Items</th><th>Order Type</th><th>Payment Status</th><th>Update Status</th></tr></thead>
+        <tbody>{sortedOrders.map((order) => (
+          <tr key={order.id}>
+            <td><strong>{order.orderNumber}</strong></td>
+            <td>{order.items.map((item) => `${item.name} × ${item.quantity}`).join(', ')}</td>
+            <td>{orderTypeLabel(order.orderType)}{order.orderType === 'dine-in' && order.table ? ` · Table ${order.table}` : ''}</td>
+            <td><span className={`payment-chip payment-${paymentStatusForOrderType(order.orderType).toLowerCase().replaceAll(' ', '-')}`}>{paymentStatusForOrderType(order.orderType)}</span></td>
+            <td><label className="sr-only" htmlFor={`order-status-${order.id}`}>Update status for order {order.orderNumber}</label><select id={`order-status-${order.id}`} className={`order-status-select status-${order.status.toLowerCase().replaceAll('/', '-')}`} value={order.status} onChange={(event) => onStatusChange(order.id, event.target.value)}>{orderStatuses.map((status) => <option key={status}>{status}</option>)}</select></td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
   );
 }
 
@@ -1047,6 +1168,11 @@ function OwnerPage({ orders, menu, setMenu, categories, tableCount, setTableCoun
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', category: categories[0] || '', price: '', image: '', available: true, tag: '' });
   const todayOrders = orders.filter((order) => new Date(order.createdAt).toDateString() === new Date().toDateString());
+  const updateStatus = (id, status) => {
+    const updatedOrders = orders.map((order) => order.id === id ? { ...order, status } : order);
+    writeStorage('7sky-orders', updatedOrders);
+    setOrders(updatedOrders);
+  };
   const popular = useMemo(() => {
     const counts = {};
     orders.forEach((order) => order.items.forEach((item) => { counts[item.name] = (counts[item.name] || 0) + item.quantity; }));
@@ -1076,32 +1202,32 @@ function OwnerPage({ orders, menu, setMenu, categories, tableCount, setTableCoun
     setEditing(null);
   };
   const deleteDish = (id) => {
-    if (window.confirm('Remove this dish from the sample menu?')) setMenu((current) => current.filter((dish) => dish.id !== id));
+    if (window.confirm('Remove this dish from the menu?')) setMenu((current) => current.filter((dish) => dish.id !== id));
   };
   const toggleDish = (id) => setMenu((current) => current.map((dish) => dish.id === id ? { ...dish, available: !dish.available } : dish));
   return (
     <main className="page-shell dashboard-page owner-page">
-      <div className="dashboard-heading"><div><span className="eyebrow">7TH SKY · OWNER PORTAL</span><h1>Restaurant <em>overview.</em></h1><p>Orders, menu and table setup for this browser’s local demo.</p></div><span className="demo-pill">LOCAL DEMO · SAME BROWSER</span></div>
+      <div className="dashboard-heading"><div><span className="eyebrow">7TH SKY · OWNER PORTAL</span><h1>Restaurant <em>overview.</em></h1><p>Orders, menu and table setup.</p></div><span className="device-pill">CURRENT DEVICE</span></div>
       <div className="tabs owner-tabs" role="tablist">
         {['Overview', 'Orders', 'Menu', 'Tables & QR'].map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item}</button>)}
       </div>
       {tab === 'Overview' && <>
         <div className="stats-grid">
-          <StatCard label="All sample orders" value={orders.length} note="Across this browser" />
+          <StatCard label="All orders" value={orders.length} note="Orders placed" />
           <StatCard label="Today’s orders" value={todayOrders.length} note="Since midnight" />
-          <StatCard label="Demo revenue" value={formatRupees(0)} note="No verified payments" />
+          <StatCard label="Revenue" value={formatRupees(0)} note="No paid orders" />
           <StatCard label="In the kitchen" value={orders.filter((order) => !['Ready', 'Completed'].includes(order.status)).length} note="Not yet ready or completed" />
         </div>
         <section className="owner-overview-grid">
-          <div className="owner-panel"><span className="eyebrow">RECENT ORDERS</span><h2>On the books</h2>{orders.slice(0, 5).length ? orders.slice(0, 5).map((order) => <div className="recent-order" key={order.id}><div><strong>{order.orderNumber}</strong><span>{orderTypeLabel(order.orderType)}{order.table ? ` · Table ${order.table}` : ''} · {new Date(order.createdAt).toLocaleDateString('en-IN')}</span></div><span className={`status-badge status-${order.status.toLowerCase()}`}>{order.status}</span></div>) : <p className="muted-copy">No sample orders yet. Try placing one from the menu.</p>}</div>
-          <div className="owner-panel"><span className="eyebrow">MOST ORDERED</span><h2>People love</h2>{popular.length ? popular.map(([name, count], index) => <div className="popular-row" key={name}><span>0{index + 1}</span><strong>{name}</strong><span>{count} {count === 1 ? 'order' : 'orders'}</span></div>) : <p className="muted-copy">Popular dishes will appear after the first sample order.</p>}</div>
+          <div className="owner-panel owner-recent-orders"><span className="eyebrow">RECENT ORDERS</span><h2>On the books</h2><OrdersTable orders={orders.slice(0, 5)} onStatusChange={updateStatus} /></div>
+          <div className="owner-panel"><span className="eyebrow">MOST ORDERED</span><h2>People love</h2>{popular.length ? popular.map(([name, count], index) => <div className="popular-row" key={name}><span>0{index + 1}</span><strong>{name}</strong><span>{count} {count === 1 ? 'order' : 'orders'}</span></div>) : <p className="muted-copy">Popular dishes will appear after the first order.</p>}</div>
         </section>
       </>}
       {tab === 'Orders' && <section className="owner-panel order-table-panel"><div className="panel-title-row"><div><span className="eyebrow">ORDER HISTORY</span><h2>Every good thing, logged.</h2></div><div className="filter-group"><label className="filter-select">Date <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>{['All time', 'Today', 'Last 7 days'].map((date) => <option key={date}>{date}</option>)}</select></label><label className="filter-select">Status <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{['All', ...orderStatuses].map((status) => <option key={status}>{status}</option>)}</select></label></div></div>
-        {filteredOrders.length ? <div className="table-scroll"><table><thead><tr><th>Order</th><th>Time</th><th>Type</th><th>Amount</th><th>Payment</th><th>Kitchen status</th></tr></thead><tbody>{filteredOrders.map((order) => <tr key={order.id}><td><strong>{order.orderNumber}</strong></td><td>{new Date(order.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</td><td>{orderTypeLabel(order.orderType)}{order.table ? ` · Table ${order.table}` : ''}</td><td>{formatRupees(order.subtotal)}</td><td>{order.paymentStatus}</td><td><span className={`status-badge status-${order.status.toLowerCase()}`}>{order.status}</span></td></tr>)}</tbody></table></div> : <p className="muted-copy">No orders match this filter.</p>}
+        <OrdersTable orders={filteredOrders} onStatusChange={updateStatus} />
       </section>}
-      {tab === 'Menu' && <section className="owner-panel owner-menu-panel"><div className="panel-title-row"><div><span className="eyebrow">ILLUSTRATIVE MENU</span><h2>Keep the good things coming.</h2></div><button className="button button-dark" onClick={openNew}>Add dish <span>+</span></button></div>
-        <div className="category-management"><span className="eyebrow">MENU CATEGORIES</span><div className="category-chips">{categories.map((category) => <span key={category}>{category}</span>)}</div><p className="muted-copy">Menu categories are fixed to Biriyani and Mandi.</p></div>
+      {tab === 'Menu' && <section className="owner-panel owner-menu-panel"><div className="panel-title-row"><div><span className="eyebrow">OUR MENU</span><h2>Keep the good things coming.</h2></div><button className="button button-dark" onClick={openNew}>Add dish <span>+</span></button></div>
+        <div className="category-management"><span className="eyebrow">MENU CATEGORIES</span><div className="category-chips">{categories.map((category) => <span key={category}>{category}</span>)}</div></div>
         {editing && <form className="dish-editor" onSubmit={saveDish}>
           <h3>{editing === 'new' ? 'Add a dish' : 'Edit dish'}</h3>
           <div className="editor-grid">
@@ -1123,7 +1249,7 @@ function OwnerPage({ orders, menu, setMenu, categories, tableCount, setTableCoun
             if (Number.isInteger(count) && count > 0 && count <= maxTables) setTableCount(count);
           }} />
         </label>
-        <p className="demo-caption">Table QR codes point to this site’s current origin. Configure your production domain and print the codes before service.</p>
+        <p className="device-order-note">Table QR codes use this site’s current address. Confirm it before printing the codes.</p>
         <div className="table-qr-grid">{Array.from({ length: tableCount }, (_, index) => {
           const number = index + 1;
           const url = new URL(window.location.href);
@@ -1157,10 +1283,10 @@ function Footer({ variant }) {
         <Link className="brand footer-brand" to="/" aria-label="7th Sky home"><img className="brand-logo" src={brandLogo} alt="7th Sky" /></Link>
         <p>Come hungry.<br />Leave room for one more.</p>
         <div className="footer-links">
-          {variant === 'home' ? <><Link to="/#story">Our story <span>↗</span></Link><Link to="/#signature">The menu <span>↗</span></Link><Link to="/#order">How to order <span>↗</span></Link></> : <><Link to="/menu">Menu <span>↗</span></Link><Link to="/cart">Your cart <span>↗</span></Link></>}
+          {variant === 'home' ? <><Link to="/#story">Our story <ArrowIcon /></Link><Link to="/#signature">The menu <ArrowIcon /></Link><Link to="/#order">How to order <ArrowIcon /></Link></> : <><Link to="/menu">Menu <ArrowIcon /></Link><Link to="/cart">Your cart <ArrowIcon /></Link></>}
         </div>
       </div>
-      <div className="footer-bottom"><span>© 2026 7th Sky · Ordering demo</span><span>Demo prices · Simulated payments only</span></div>
+      <div className="footer-bottom"><span>Copyright 2026 7th Sky</span><span>Orders saved on this device · Payment status set when your order is placed</span></div>
     </footer>
   );
 }

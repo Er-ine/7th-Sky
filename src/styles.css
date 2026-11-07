@@ -1533,3 +1533,51 @@ main.page-shell { animation: page-enter .35s ease both; }
   font-size: 17px;
   font-weight: 700;
 }
+
+/* Live order status, tracking and read-only status chips */
+.order-status-select { width: 100%; max-width: 100%; }
+.orders-table td:last-child { min-width: 190px; }
+.order-status-select.status-delivered, .order-status-select.status-on-the-way, .order-status-select.status-at-reception { border-color: var(--accent-pink); }
+.status-chip { display: inline-flex; padding: 6px 11px; border: 1px solid rgba(212, 162, 76, .5); border-radius: 999px; color: #f5d992; background: rgba(212, 162, 76, .1); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.status-chip.status-completed { border-color: rgba(122, 31, 43, .9); color: #ffc0d9; background: rgba(122, 31, 43, .25); }
+.live-status { padding: 18px; margin: 0 0 18px; border: 1px solid var(--line); border-radius: 12px; background: rgba(212, 162, 76, .08); }
+.live-status span { display: block; color: #d2c3ad; font-size: 12px; letter-spacing: 1px; }
+.live-status strong { display: block; margin-top: 6px; color: #f0c66f; font: 600 clamp(26px, 4vw, 34px)/1.15 var(--serif); }
+.status-track { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; padding: 0; margin: 0 0 26px; list-style: none; }
+.status-step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 4px; text-align: center; }
+.status-step::before { position: absolute; top: 11px; right: 50%; left: -50%; height: 2px; background: rgba(212, 162, 76, .25); content: ''; }
+.status-step:first-child::before { display: none; }
+.status-step-dot { position: relative; z-index: 1; width: 14px; height: 14px; border: 2px solid rgba(212, 162, 76, .5); border-radius: 50%; background: #1a1410; }
+.status-step-label { color: #b8a98f; font-size: 12px; line-height: 1.35; }
+.status-step.is-done::before, .status-step.is-current::before { background: var(--accent-gold); }
+.status-step.is-done .status-step-dot { border-color: var(--accent-gold); background: var(--accent-gold); }
+.status-step.is-current .status-step-dot { border-color: var(--accent-saffron); background: var(--accent-saffron); box-shadow: 0 0 0 5px rgba(255, 159, 28, .22); }
+.status-step.is-done .status-step-label, .status-step.is-current .status-step-label { color: #f5d992; font-weight: 700; }
+@media (max-width: 560px) {
+  .status-step-label { font-size: 10.5px; }
+}
+
+/* Owner overview charts */
+.owner-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin: 22px 0; }
+.chart-card { min-width: 0; padding: clamp(18px, 2.4vw, 28px); }
+.chart-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.chart-heading h2 { margin: 6px 0 0; font: 500 clamp(22px, 2.2vw, 28px)/1.15 var(--serif); }
+.chart-toggle { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: rgba(13, 11, 10, .6); }
+.chart-toggle button { padding: 7px 13px; border: 0; border-radius: 999px; color: #d2c3ad; background: transparent; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: background .2s ease, color .2s ease; }
+.chart-toggle button:hover { color: var(--cream); }
+.chart-toggle button.active { color: #1a1410; background: var(--accent-gold); }
+.chart-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart-grid { stroke: rgba(212, 162, 76, .16); stroke-width: 1; stroke-dasharray: 3 5; }
+.chart-baseline { stroke: rgba(212, 162, 76, .5); stroke-width: 1.2; }
+.chart-axis { fill: #c9b99f; font: 16px 'Poppins', system-ui, sans-serif; }
+.chart-bar { fill: var(--accent-gold); transition: fill .2s ease, opacity .2s ease; }
+.chart-bar:hover { fill: var(--accent-saffron); }
+.chart-bar.is-peak { fill: var(--accent-coral); }
+.chart-summary { margin: 12px 0 0; color: #d2c3ad; font-size: 13.5px; line-height: 1.65; }
+.chart-summary strong { color: #f0c66f; }
+@media (max-width: 980px) {
+  .owner-charts { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-bar, .chart-toggle button { transition: none; }
+}

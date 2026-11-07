@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
+import { api } from './api.js';
 import { brandLogo, formatRupees, heroSlides, initialCategories, initialMenu, readStorage, uploadedMenuImageReplacements, writeStorage } from './data.js';
 
-const orderStatuses = ['Placed', 'Preparing', 'Ready', 'Served/Delivered', 'Completed'];
-const staffAccounts = {
-  kitchen: { password: 'kitchen123', role: 'kitchen' },
-  owner: { password: 'owner123', role: 'owner' },
+const statusFlows = {
+  'dine-in': ['Placed', 'Preparing', 'Ready', 'Delivered', 'Completed'],
+  delivery: ['Placed', 'Preparing', 'Ready', 'On the way', 'Completed'],
+  takeaway: ['Placed', 'Preparing', 'Ready', 'At reception', 'Completed'],
+};
+const allStatuses = ['Placed', 'Preparing', 'Ready', 'Delivered', 'On the way', 'At reception', 'Completed'];
+const customerStatusLabels = {
+  Placed: 'Order received',
+  Preparing: 'Being prepared',
+  Ready: 'Ready',
+  Delivered: 'Served at your table',
+  'On the way': 'On the way',
+  'At reception': 'Ready for pickup',
+  Completed: 'Completed',
 };
 const retiredMenuIds = new Set([
   'alfaham-mandi',
@@ -23,8 +34,16 @@ const renamedMenuItems = new Map([
 ]);
 const maxTables = 50;
 
-function paymentStatusForOrderType(orderType) {
-  return orderType === 'dine-in' ? 'Not Paid' : 'Paid';
+function statusFlowFor(orderType) {
+  return statusFlows[orderType] || statusFlows.takeaway;
+}
+
+function statusClass(status) {
+  return `status-${String(status).toLowerCase().replace(/[^a-z]+/g, '-')}`;
+}
+
+function newAttemptId() {
+  return window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function paymentMethodLabel(method, orderType) {
@@ -119,27 +138,6 @@ function orderTypeLabel(type) {
   return 'Takeaway';
 }
 
-function createOrderRecord({ items, subtotal, orderType, table = '', customerName, phone = '', deliveryAddress = '', instructions = '', checkoutAttemptId = '', paymentMethod = '' }) {
-  const id = `7S-${new Date().toISOString().slice(2, 10).replaceAll('-', '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-  return {
-    id,
-    orderNumber: id,
-    checkoutAttemptId,
-    items: items.map((item) => ({ ...item })),
-    subtotal,
-    orderType,
-    table: orderType === 'dine-in' ? table : '',
-    customerName,
-    phone,
-    deliveryAddress,
-    instructions,
-    status: 'Placed',
-    paymentStatus: paymentStatusForOrderType(orderType),
-    paymentMethod: orderType === 'dine-in' ? 'pay-at-restaurant' : paymentMethod || 'in-app-payment',
-    createdAt: new Date().toISOString(),
-  };
-}
-
 function migrateMenu(savedMenu, preserveDeletions = false) {
   if (!Array.isArray(savedMenu)) return initialMenu;
   const seedIds = new Set(initialMenu.map((dish) => dish.id));
@@ -167,41 +165,6 @@ function migrateMenu(savedMenu, preserveDeletions = false) {
     && initialCategories.includes(dish.category),
   );
   return [...seededMenu, ...customMenu];
-}
-
-function migrateOrders(savedOrders) {
-  if (!Array.isArray(savedOrders)) return [];
-  return savedOrders.flatMap((order) => {
-    if (!order || !Array.isArray(order.items)) return [];
-    const items = order.items
-      .filter((item) => item && !retiredMenuIds.has(item.id))
-      .map((item) => {
-        const renamedItem = renamedMenuItems.get(item.id);
-        const currentDish = initialMenu.find((dish) => dish.id === item.id);
-        return {
-          ...item,
-          name: renamedItem?.previousName === item.name ? currentDish.name : item.name,
-          image: uploadedMenuImageReplacements.get(item.id)?.previous === item.image
-            ? uploadedMenuImageReplacements.get(item.id).current
-            : item.image,
-        };
-      });
-    if (!items.length) return [];
-    const status = order.status === 'New' || order.status === 'Accepted' || !orderStatuses.includes(order.status)
-      ? 'Placed'
-      : order.status;
-    return [{
-      ...order,
-      items,
-      subtotal: items.reduce((total, item) => total + item.price * item.quantity, 0),
-      table: order.orderType === 'dine-in' ? order.table : '',
-      status,
-      paymentStatus: paymentStatusForOrderType(order.orderType),
-      paymentMethod: order.orderType === 'dine-in'
-        ? 'pay-at-restaurant'
-        : ['card', 'upi', 'qr'].includes(order.paymentMethod) ? order.paymentMethod : order.paymentMethod || 'in-app-payment',
-    }];
-  });
 }
 
 function loadMenu() {
@@ -287,9 +250,13 @@ function App() {
     const savedOrderType = readStorage('7sky-order-type', '');
     return savedOrderType === 'takeaway' || savedOrderType === 'delivery' ? savedOrderType : '';
   });
-  const [orders, setOrders] = useState(() => migrateOrders(readStorage('7sky-orders', [])));
+  const [orders, setOrders] = useState([]);
+  const [ordersError, setOrdersError] = useState('');
   const menuCategories = initialCategories;
-  const [user, setUser] = useState(() => readStorage('7sky-user', null));
+  const [user, setUser] = useState(() => {
+    const saved = readStorage('7sky-user', null);
+    return saved?.token ? saved : null;
+  });
   const [toast, setToast] = useState('');
   const [cartPulse, setCartPulse] = useState(false);
   const toastTimeout = useRef(0);
@@ -305,7 +272,6 @@ function App() {
   useEffect(() => writeStorage('7sky-order-type', orderType), [orderType]);
   useEffect(() => writeStorage('7sky-table', table), [table]);
   useEffect(() => writeStorage('7sky-table-count', tableCount), [tableCount]);
-  useEffect(() => writeStorage('7sky-orders', orders), [orders]);
   useEffect(() => {
     writeStorage('7sky-menu', menu);
     writeStorage('7sky-menu-schema', 4);
@@ -335,7 +301,6 @@ function App() {
   useEffect(() => {
     const sync = (event) => {
       try {
-        if (event.key === '7sky-orders' && event.newValue) setOrders(migrateOrders(JSON.parse(event.newValue)));
         if (event.key === '7sky-menu' && event.newValue) setMenu(migrateMenu(JSON.parse(event.newValue), true));
       } catch (error) {
         console.error('Could not sync restaurant data from another tab.', error);
@@ -344,6 +309,32 @@ function App() {
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
   }, []);
+
+  useEffect(() => {
+    if (!user?.token || !['kitchen', 'owner'].includes(user.role)) {
+      setOrders([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const list = await api('/api/orders', { token: user.token });
+        if (cancelled) return;
+        setOrders(list);
+        setOrdersError('');
+      } catch (error) {
+        if (cancelled) return;
+        if (error.status === 401) setUser(null);
+        else setOrdersError(error.message);
+      }
+    };
+    load();
+    const timer = window.setInterval(load, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [user?.token, user?.role]);
 
   useEffect(() => {
     if (location.hash) {
@@ -463,8 +454,6 @@ function App() {
               itemCount={itemCount}
               subtotal={subtotal}
               orderType={orderType}
-              orders={orders}
-              setOrders={setOrders}
               setCart={setCart}
               table={table}
               tableNotice={tableNotice}
@@ -480,13 +469,13 @@ function App() {
               cart={cart}
               subtotal={subtotal}
               orderType={orderType}
-              orders={orders}
-              setOrders={setOrders}
               setCart={setCart}
             />
           }
         />
-        <Route path="/confirmation/:orderId" element={<ConfirmationPage orders={orders} />} />
+        <Route path="/confirmation/:orderId" element={<OrderStatusPage mode="confirmation" />} />
+        <Route path="/order/:orderId" element={<OrderStatusPage mode="track" />} />
+        <Route path="/track" element={<TrackLookupPage />} />
         <Route
           path="/login/:role"
           element={<LoginPage setUser={setUser} />}
@@ -495,7 +484,7 @@ function App() {
           path="/kitchen"
           element={
             <ProtectedRoute user={user} role="kitchen">
-              <KitchenPage orders={orders} setOrders={setOrders} />
+              <KitchenPage orders={orders} setOrders={setOrders} token={user?.token} error={ordersError} />
             </ProtectedRoute>
           }
         />
@@ -503,7 +492,7 @@ function App() {
           path="/owner"
           element={
             <ProtectedRoute user={user} role="owner">
-              <OwnerPage orders={orders} menu={menu} setMenu={setMenu} categories={menuCategories} tableCount={tableCount} setTableCount={setTableCount} />
+              <OwnerPage orders={orders} error={ordersError} menu={menu} setMenu={setMenu} categories={menuCategories} tableCount={tableCount} setTableCount={setTableCount} />
             </ProtectedRoute>
           }
         />
@@ -566,7 +555,8 @@ function Header({ itemCount, user, onLogout, table, variant, cartPulse }) {
         <nav className={`main-nav ${mobileOpen ? 'is-open' : ''}`} aria-label="Main navigation">
           <Link to="/">Home</Link>
           <Link to="/menu">Menu</Link>
-          {variant === 'home' && <><Link to="/#story">Our story</Link><Link to="/#order">Order</Link></>}
+          {variant === 'home' && <Link to="/#order">Order</Link>}
+          <Link to="/track">Track order</Link>
           <Link className={`nav-cart${cartPulse ? ' cart-wiggle' : ''}`} to="/cart">Cart <span>{itemCount}</span></Link>
         </nav>
         <div className="login-wrap">
@@ -811,9 +801,12 @@ function QuantityControl({ quantity, onChange, label }) {
   );
 }
 
-function CartPage({ cart, itemCount, subtotal, orderType, orders, setOrders, setCart, table, tableNotice, setQuantity, onMissingTable }) {
+function CartPage({ cart, itemCount, subtotal, orderType, setCart, table, tableNotice, setQuantity, onMissingTable }) {
   const navigate = useNavigate();
   const items = Object.values(cart);
+  const [placing, setPlacing] = useState(false);
+  const [placeError, setPlaceError] = useState('');
+  const dineInAttempt = useRef(newAttemptId());
   const proceed = () => {
     if (!items.length) return;
     if (!orderType) {
@@ -825,21 +818,30 @@ function CartPage({ cart, itemCount, subtotal, orderType, orders, setOrders, set
       return;
     }
     if (orderType === 'dine-in') {
-      const savedOrders = migrateOrders(orders);
-      const order = createOrderRecord({
-        items,
-        subtotal,
-        orderType,
-        table,
-        customerName: `Table ${table} guest`,
-      });
-      const nextOrders = [order, ...savedOrders];
-      writeStorage('7sky-orders', nextOrders);
-      setOrders(nextOrders);
-      setCart({});
-      sessionStorage.removeItem('7sky-checkout-started');
-      sessionStorage.removeItem('7sky-checkout-attempt');
-      navigate(`/confirmation/${encodeURIComponent(order.id)}`, { replace: true });
+      if (placing) return;
+      setPlacing(true);
+      setPlaceError('');
+      api('/api/orders', {
+        method: 'POST',
+        body: {
+          orderType,
+          table,
+          customerName: `Table ${table} guest`,
+          checkoutAttemptId: dineInAttempt.current,
+          items: items.map(({ id, name, price, quantity, image }) => ({ id, name, price, quantity, image })),
+        },
+      })
+        .then((order) => {
+          writeStorage('7sky-last-order', order.id);
+          setCart({});
+          sessionStorage.removeItem('7sky-checkout-started');
+          sessionStorage.removeItem('7sky-checkout-attempt');
+          navigate(`/confirmation/${encodeURIComponent(order.id)}`, { replace: true });
+        })
+        .catch((error) => {
+          setPlaceError(error.message);
+          setPlacing(false);
+        });
       return;
     }
     if (!sessionStorage.getItem('7sky-checkout-attempt')) {
@@ -888,7 +890,8 @@ function CartPage({ cart, itemCount, subtotal, orderType, orders, setOrders, set
             <p className="summary-note">Taxes and service charges are not included.</p>
             {tableNotice && <p className="table-notice" role="status">{tableNotice}</p>}
             {orderType === 'dine-in' && !table && <p className="table-notice">Scan your table QR before placing a dine-in order.</p>}
-            <button className="button button-dark full-button" onClick={proceed}>{orderType === 'dine-in' ? 'Place Order' : 'Continue to payment'} <ArrowIcon /></button>
+            {placeError && <p className="table-notice" role="alert">{placeError}</p>}
+            <button className="button button-dark full-button" onClick={proceed} disabled={placing}>{orderType === 'dine-in' ? (placing ? 'Placing order…' : 'Place Order') : 'Continue to payment'} <ArrowIcon /></button>
           </aside>
         </div>
       )}
@@ -896,7 +899,7 @@ function CartPage({ cart, itemCount, subtotal, orderType, orders, setOrders, set
   );
 }
 
-function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart }) {
+function CheckoutPage({ cart, subtotal, orderType, setCart }) {
   const navigate = useNavigate();
   const started = sessionStorage.getItem('7sky-checkout-started') === 'yes';
   const [details, setDetails] = useState({ name: '', phone: '', address: '', instructions: '' });
@@ -949,39 +952,33 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart })
     }
     submissionLock.current = true;
     setSubmitting(true);
-    const attemptId = sessionStorage.getItem('7sky-checkout-attempt')
-      || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const attemptId = sessionStorage.getItem('7sky-checkout-attempt') || newAttemptId();
     sessionStorage.setItem('7sky-checkout-attempt', attemptId);
-    const previouslyCompletedOrder = orders.find((savedOrder) => savedOrder.checkoutAttemptId === attemptId);
-    if (previouslyCompletedOrder) {
-      setCart({});
-      sessionStorage.removeItem('7sky-checkout-started');
-      sessionStorage.removeItem('7sky-checkout-attempt');
-      navigate(`/confirmation/${encodeURIComponent(previouslyCompletedOrder.id)}`, { replace: true });
-      return;
-    }
-    const order = createOrderRecord({
-      items,
-      subtotal,
-      orderType,
-      customerName: details.name.trim(),
-      phone: phoneDigits,
-      deliveryAddress: orderType === 'delivery' ? details.address.trim() : '',
-      instructions: details.instructions.trim(),
-      checkoutAttemptId: attemptId,
-      paymentMethod,
-    });
-    window.setTimeout(() => {
-      const savedOrders = migrateOrders(readStorage('7sky-orders', orders));
-      const duplicate = savedOrders.find((savedOrder) => savedOrder.checkoutAttemptId === attemptId);
-      const nextOrders = duplicate ? savedOrders : [order, ...savedOrders];
-      writeStorage('7sky-orders', nextOrders);
-      setOrders(nextOrders);
-      setCart({});
-      sessionStorage.removeItem('7sky-checkout-started');
-      sessionStorage.removeItem('7sky-checkout-attempt');
-      navigate(`/confirmation/${encodeURIComponent(duplicate?.id || order.id)}`, { replace: true });
-    }, 350);
+    api('/api/orders', {
+      method: 'POST',
+      body: {
+        orderType,
+        customerName: details.name.trim(),
+        phone: phoneDigits,
+        deliveryAddress: orderType === 'delivery' ? details.address.trim() : '',
+        instructions: details.instructions.trim(),
+        checkoutAttemptId: attemptId,
+        paymentMethod,
+        items: items.map(({ id, name, price, quantity, image }) => ({ id, name, price, quantity, image })),
+      },
+    })
+      .then((order) => {
+        writeStorage('7sky-last-order', order.id);
+        setCart({});
+        sessionStorage.removeItem('7sky-checkout-started');
+        sessionStorage.removeItem('7sky-checkout-attempt');
+        navigate(`/confirmation/${encodeURIComponent(order.id)}`, { replace: true });
+      })
+      .catch((error) => {
+        submissionLock.current = false;
+        setSubmitting(false);
+        setErrors({ form: error.message });
+      });
   };
   if (!started || !items.length || !['takeaway', 'delivery'].includes(orderType)) return null;
 
@@ -1093,6 +1090,7 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart })
               <div><strong>{formatRupees(subtotal)}</strong><span>Scan with any UPI app</span></div>
             </div>
           )}
+          {errors.form && <p className="form-error" role="alert">{errors.form}</p>}
           <button className="button button-pay full-button" type="submit" disabled={submitting}>{submitting ? 'Completing payment…' : `Pay ${formatRupees(subtotal)}`}</button>
           </section>
         </form>
@@ -1108,31 +1106,102 @@ function CheckoutPage({ cart, subtotal, orderType, orders, setOrders, setCart })
   );
 }
 
-function ConfirmationPage({ orders }) {
+function OrderStatusPage({ mode }) {
   const { orderId } = useParams();
-  const order = orders.find((item) => item.id === orderId);
-  if (!order) return <main className="page-shell"><div className="empty-cart"><h2>We couldn’t find that order.</h2><Link className="button button-dark" to="/menu">Back to the menu</Link></div></main>;
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [connectionError, setConnectionError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    let timer = 0;
+    setLoading(true);
+    setNotFound(false);
+    const load = async () => {
+      try {
+        const data = await api(`/api/orders/${encodeURIComponent(orderId)}`);
+        if (cancelled) return;
+        setOrder(data);
+        setConnectionError('');
+        setLoading(false);
+        if (data.status === 'Completed') return;
+      } catch (error) {
+        if (cancelled) return;
+        setLoading(false);
+        if (error.status === 404) {
+          setNotFound(true);
+          return;
+        }
+        setConnectionError(error.message);
+      }
+      timer = window.setTimeout(load, 4000);
+    };
+    load();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [orderId]);
+
+  if (loading) return <main className="page-shell"><div className="empty-cart"><h2>Loading your order…</h2></div></main>;
+  if (notFound || !order) return <main className="page-shell"><div className="empty-cart"><h2>We couldn’t find that order.</h2><p>Check the order number and try again.</p><Link className="button button-dark" to="/track">Track an order</Link></div></main>;
+  const flow = statusFlowFor(order.orderType);
+  const currentIndex = flow.indexOf(order.status);
   return (
     <main className="page-shell confirmation-page">
       <div className="confirmation-card">
         <div className="confirmation-success-icon"><OrderBurst /><CheckIcon /></div>
-        <span className="eyebrow">ORDER PLACED</span>
-        <h1>Your order is <em>saved.</em></h1>
+        <span className="eyebrow">{mode === 'confirmation' ? 'ORDER PLACED' : 'ORDER STATUS'}</span>
+        <h1>{mode === 'confirmation' ? <>Your order is <em>placed.</em></> : <>Your order <em>status.</em></>}</h1>
         <HeadingAccent />
-        <p className="confirmation-subtitle">Your order is saved on this device. The restaurant cannot see it online yet.</p>
+        <p className="confirmation-subtitle">This page updates by itself while the kitchen works on your order.</p>
         <div className="confirmation-number"><span>ORDER NUMBER</span><strong>{order.orderNumber}</strong></div>
+        <div className="live-status" role="status" aria-live="polite">
+          <span>CURRENT STATUS</span>
+          <strong>{customerStatusLabels[order.status] || order.status}</strong>
+        </div>
+        <ol className="status-track" aria-label="Order progress">
+          {flow.map((step, index) => (
+            <li key={step} className={`status-step${index < currentIndex ? ' is-done' : ''}${index === currentIndex ? ' is-current' : ''}`}>
+              <span className="status-step-dot" aria-hidden="true" />
+              <span className="status-step-label">{customerStatusLabels[step] || step}</span>
+            </li>
+          ))}
+        </ol>
         <div className="confirmation-details">
           <div><span>Order type</span><strong>{orderTypeLabel(order.orderType)}{order.table ? ` · Table ${order.table}` : ''}</strong></div>
           <div><span>Payment method</span><strong>{paymentMethodLabel(order.paymentMethod, order.orderType)}</strong></div>
-          <div><span>Payment status</span><strong>{paymentStatusForOrderType(order.orderType)}</strong></div>
-          <div><span>Customer</span><strong>{order.customerName || 'Guest'}{order.phone && <><br />{order.phone}</>}</strong></div>
-          <div><span>Order status</span><strong>{order.status}</strong></div>
-          {order.deliveryAddress && <div className="confirmation-delivery-address"><span>Delivery address</span><strong>{order.deliveryAddress}</strong></div>}
+          <div><span>Payment status</span><strong>{order.paymentStatus}</strong></div>
+          <div><span>Customer</span><strong>{order.customerName || 'Guest'}</strong></div>
         </div>
         <div className="confirmation-items">{order.items.map((item) => <p key={item.id}>{item.quantity} × {item.name}<span>{formatRupees(item.price * item.quantity)}</span></p>)}</div>
         <div className="confirmation-total"><span>Order total</span><strong>{formatRupees(order.subtotal)}</strong></div>
-        <p className="device-order-note">This order is saved on this device only.</p>
+        {connectionError && <p className="device-order-note" role="status">Reconnecting… {connectionError}</p>}
         <Link to="/" className="button button-dark">Return to homepage <ArrowIcon /></Link>
+      </div>
+    </main>
+  );
+}
+
+function TrackLookupPage() {
+  const navigate = useNavigate();
+  const [value, setValue] = useState(() => readStorage('7sky-last-order', ''));
+  const submit = (event) => {
+    event.preventDefault();
+    const id = value.trim().toUpperCase();
+    if (id) navigate(`/order/${encodeURIComponent(id)}`);
+  };
+  return (
+    <main className="page-shell confirmation-page">
+      <div className="confirmation-card">
+        <span className="eyebrow">TRACK YOUR ORDER</span>
+        <h1>Where is my <em>order?</em></h1>
+        <HeadingAccent />
+        <p className="confirmation-subtitle">Enter the order number from your confirmation page.</p>
+        <form onSubmit={submit} noValidate>
+          <label className="form-field">Order number<input value={value} onChange={(event) => setValue(event.target.value)} placeholder="7S-261107-ABC123" autoComplete="off" /></label>
+          <button className="button button-dark full-button" disabled={!value.trim()}>Track order <ArrowIcon /></button>
+        </form>
       </div>
     </main>
   );
@@ -1164,7 +1233,7 @@ function LoginPage({ setUser }) {
     return () => window.clearTimeout(timer);
   }, [notice]);
   if (!validRole) return <Navigate to="/" replace />;
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     setError('');
     if (!username.trim() || !password) {
@@ -1172,16 +1241,14 @@ function LoginPage({ setUser }) {
       return;
     }
     setBusy(true);
-    window.setTimeout(() => {
-      const account = staffAccounts[username.trim().toLowerCase()];
-      if (!account || account.password !== password || account.role !== role) {
-        setError(`Those details don’t match the ${role} account.`);
-        setBusy(false);
-        return;
-      }
-      setUser({ username: username.trim().toLowerCase(), role });
+    try {
+      const session = await api('/api/login', { method: 'POST', body: { username: username.trim(), password, role } });
+      setUser({ username: session.username, role: session.role, token: session.token });
       navigate(role === 'owner' ? '/owner' : '/kitchen', { replace: true });
-    }, 350);
+    } catch (loginError) {
+      setError(loginError.message);
+      setBusy(false);
+    }
   };
   return (
     <main className={`page-shell login-page login-page-${role}`}>
@@ -1213,13 +1280,21 @@ function LoginPage({ setUser }) {
   );
 }
 
-function KitchenPage({ orders, setOrders }) {
+function KitchenPage({ orders, setOrders, token, error }) {
   const [filter, setFilter] = useState('All');
+  const [actionError, setActionError] = useState('');
   const filtered = orders.filter((order) => filter === 'All' || (filter === 'Active' ? order.status !== 'Completed' : order.status === 'Completed'));
-  const updateStatus = (id, status) => {
-    const updatedOrders = orders.map((order) => order.id === id ? { ...order, status } : order);
-    writeStorage('7sky-orders', updatedOrders);
-    setOrders(updatedOrders);
+  const updateStatus = async (id, status) => {
+    const previousStatus = orders.find((order) => order.id === id)?.status;
+    setActionError('');
+    setOrders((current) => current.map((order) => order.id === id ? { ...order, status } : order));
+    try {
+      const updated = await api(`/api/orders/${encodeURIComponent(id)}/status`, { method: 'PATCH', token, body: { status } });
+      setOrders((current) => current.map((order) => order.id === id ? updated : order));
+    } catch (updateError) {
+      setOrders((current) => current.map((order) => order.id === id && previousStatus ? { ...order, status: previousStatus } : order));
+      setActionError(updateError.message);
+    }
   };
   const activeOrders = orders.filter((order) => order.status !== 'Completed');
   const newOrders = orders.filter((order) => order.status === 'Placed');
@@ -1228,8 +1303,8 @@ function KitchenPage({ orders, setOrders }) {
   return (
     <main className="page-shell dashboard-page kitchen-page">
       <div className="dashboard-heading">
-        <div><span className="eyebrow">SERVICE OVERVIEW</span><h1>The <em>Kitchen.</em></h1><p>Orders saved on this device.</p></div>
-        <span className="device-pill">CURRENT DEVICE</span>
+        <div><span className="eyebrow">SERVICE OVERVIEW</span><h1>The <em>Kitchen.</em></h1><p>Live orders from every device.</p></div>
+        <span className="device-pill">LIVE</span>
       </div>
       <section className="kitchen-stats" aria-label="Order status summary">
         <div className="kitchen-stat kitchen-stat-new"><span>Needs attention</span><strong>{newOrders.length}</strong><small>Placed orders</small></div>
@@ -1243,6 +1318,7 @@ function KitchenPage({ orders, setOrders }) {
         </div>
         <span>{filtered.length} {filtered.length === 1 ? 'order' : 'orders'}</span>
       </div>
+      {(actionError || error) && <p className="form-error" role="alert">{actionError || error}</p>}
       <OrdersTable orders={filtered} onStatusChange={updateStatus} />
     </main>
   );
@@ -1254,14 +1330,16 @@ function OrdersTable({ orders, onStatusChange }) {
   return (
     <div className="order-table-card table-scroll">
       <table className="orders-table">
-        <thead><tr><th>Order No.</th><th>Items</th><th>Order Type</th><th>Payment Status</th><th>Update Status</th></tr></thead>
+        <thead><tr><th>Order No.</th><th>Items</th><th>Order Type</th><th>Payment Status</th><th>{onStatusChange ? 'Update Status' : 'Status'}</th></tr></thead>
         <tbody>{sortedOrders.map((order) => (
           <tr key={order.id}>
             <td><strong>{order.orderNumber}</strong></td>
             <td>{order.items.map((item) => `${item.name} × ${item.quantity}`).join(', ')}</td>
             <td>{orderTypeLabel(order.orderType)}{order.orderType === 'dine-in' && order.table ? ` · Table ${order.table}` : ''}</td>
-            <td><span className={`payment-chip payment-${paymentStatusForOrderType(order.orderType).toLowerCase().replaceAll(' ', '-')}`}>{paymentStatusForOrderType(order.orderType)}</span></td>
-            <td><label className="sr-only" htmlFor={`order-status-${order.id}`}>Update status for order {order.orderNumber}</label><select id={`order-status-${order.id}`} className={`order-status-select status-${order.status.toLowerCase().replaceAll('/', '-')}`} value={order.status} onChange={(event) => onStatusChange(order.id, event.target.value)}>{orderStatuses.map((status) => <option key={status}>{status}</option>)}</select></td>
+            <td><span className={`payment-chip payment-${String(order.paymentStatus).toLowerCase().replaceAll(' ', '-')}`}>{order.paymentStatus}</span></td>
+            <td>{onStatusChange
+              ? <select aria-label={`Status for order ${order.orderNumber}`} className={`order-status-select ${statusClass(order.status)}`} value={order.status} onChange={(event) => onStatusChange(order.id, event.target.value)}>{statusFlowFor(order.orderType).map((status) => <option key={status}>{status}</option>)}</select>
+              : <span className={`status-chip ${statusClass(order.status)}`}>{order.status}</span>}</td>
           </tr>
         ))}</tbody>
       </table>
@@ -1269,18 +1347,14 @@ function OrdersTable({ orders, onStatusChange }) {
   );
 }
 
-function OwnerPage({ orders, menu, setMenu, categories, tableCount, setTableCount }) {
+function OwnerPage({ orders, error, menu, setMenu, categories, tableCount, setTableCount }) {
   const [tab, setTab] = useState('Overview');
   const [statusFilter, setStatusFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('All time');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', category: categories[0] || '', price: '', image: '', available: true, tag: '' });
   const todayOrders = orders.filter((order) => new Date(order.createdAt).toDateString() === new Date().toDateString());
-  const updateStatus = (id, status) => {
-    const updatedOrders = orders.map((order) => order.id === id ? { ...order, status } : order);
-    writeStorage('7sky-orders', updatedOrders);
-    setOrders(updatedOrders);
-  };
+  const paidOrders = orders.filter((order) => order.paymentStatus === 'Paid');
   const popular = useMemo(() => {
     const counts = {};
     orders.forEach((order) => order.items.forEach((item) => { counts[item.name] = (counts[item.name] || 0) + item.quantity; }));
@@ -1315,7 +1389,8 @@ function OwnerPage({ orders, menu, setMenu, categories, tableCount, setTableCoun
   const toggleDish = (id) => setMenu((current) => current.map((dish) => dish.id === id ? { ...dish, available: !dish.available } : dish));
   return (
     <main className="page-shell dashboard-page owner-page">
-      <div className="dashboard-heading"><div><span className="eyebrow">7TH SKY · OWNER PORTAL</span><h1>Restaurant <em>overview.</em></h1><p>Orders, menu and table setup.</p></div><span className="device-pill">CURRENT DEVICE</span></div>
+      <div className="dashboard-heading"><div><span className="eyebrow">7TH SKY · OWNER PORTAL</span><h1>Restaurant <em>overview.</em></h1><p>Orders, menu and table setup.</p></div><span className="device-pill">LIVE</span></div>
+      {error && <p className="form-error" role="alert">{error}</p>}
       <div className="tabs owner-tabs" role="tablist">
         {['Overview', 'Orders', 'Menu', 'Tables & QR'].map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item}</button>)}
       </div>
@@ -1323,16 +1398,20 @@ function OwnerPage({ orders, menu, setMenu, categories, tableCount, setTableCoun
         <div className="stats-grid">
           <StatCard label="All orders" value={orders.length} note="Orders placed" />
           <StatCard label="Today’s orders" value={todayOrders.length} note="Since midnight" />
-          <StatCard label="Revenue" value={formatRupees(0)} note="No paid orders" />
-          <StatCard label="In the kitchen" value={orders.filter((order) => !['Ready', 'Completed'].includes(order.status)).length} note="Not yet ready or completed" />
+          <StatCard label="Revenue" value={formatRupees(paidOrders.reduce((total, order) => total + order.subtotal, 0))} note={`${paidOrders.length} paid ${paidOrders.length === 1 ? 'order' : 'orders'}`} />
+          <StatCard label="In the kitchen" value={orders.filter((order) => ['Placed', 'Preparing'].includes(order.status)).length} note="Placed or being prepared" />
         </div>
+        <section className="owner-charts" aria-label="Order charts">
+          <OrdersPerDayChart orders={orders} />
+          <PeakHoursChart orders={orders} />
+        </section>
         <section className="owner-overview-grid">
-          <div className="owner-panel owner-recent-orders"><span className="eyebrow">RECENT ORDERS</span><h2>On the books</h2><OrdersTable orders={orders.slice(0, 5)} onStatusChange={updateStatus} /></div>
+          <div className="owner-panel owner-recent-orders"><span className="eyebrow">RECENT ORDERS</span><h2>On the books</h2><OrdersTable orders={orders.slice(0, 5)} /></div>
           <div className="owner-panel"><span className="eyebrow">MOST ORDERED</span><h2>People love</h2>{popular.length ? popular.map(([name, count], index) => <div className="popular-row" key={name}><span>0{index + 1}</span><strong>{name}</strong><span>{count} {count === 1 ? 'order' : 'orders'}</span></div>) : <p className="muted-copy">Popular dishes will appear after the first order.</p>}</div>
         </section>
       </>}
-      {tab === 'Orders' && <section className="owner-panel order-table-panel"><div className="panel-title-row"><div><span className="eyebrow">ORDER HISTORY</span><h2>Every good thing, logged.</h2></div><div className="filter-group"><label className="filter-select">Date <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>{['All time', 'Today', 'Last 7 days'].map((date) => <option key={date}>{date}</option>)}</select></label><label className="filter-select">Status <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{['All', ...orderStatuses].map((status) => <option key={status}>{status}</option>)}</select></label></div></div>
-        <OrdersTable orders={filteredOrders} onStatusChange={updateStatus} />
+      {tab === 'Orders' && <section className="owner-panel order-table-panel"><div className="panel-title-row"><div><span className="eyebrow">ORDER HISTORY</span><h2>Every good thing, logged.</h2></div><div className="filter-group"><label className="filter-select">Date <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>{['All time', 'Today', 'Last 7 days'].map((date) => <option key={date}>{date}</option>)}</select></label><label className="filter-select">Status <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{['All', ...allStatuses].map((status) => <option key={status}>{status}</option>)}</select></label></div></div>
+        <OrdersTable orders={filteredOrders} />
       </section>}
       {tab === 'Menu' && <section className="owner-panel owner-menu-panel"><div className="panel-title-row"><div><span className="eyebrow">OUR MENU</span><h2>Keep the good things coming.</h2></div><button className="button button-dark" onClick={openNew}>Add dish <span>+</span></button></div>
         <div className="category-management"><span className="eyebrow">MENU CATEGORIES</span><div className="category-chips">{categories.map((category) => <span key={category}>{category}</span>)}</div></div>
@@ -1372,6 +1451,153 @@ function OwnerPage({ orders, menu, setMenu, categories, tableCount, setTableCoun
   );
 }
 
+function niceMax(value) {
+  const raw = Math.max(value, 1) / 4;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
+  const normalised = raw / magnitude;
+  const step = (normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 5 ? 5 : 10) * magnitude;
+  return step * 4;
+}
+
+function BarChart({ data, summary, labelEvery = 1, highlightMax = false }) {
+  const width = 640;
+  const height = 300;
+  const margin = { top: 18, right: 12, bottom: 40, left: 46 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+  const peak = Math.max(0, ...data.map((item) => item.value));
+  const max = niceMax(peak);
+  const ticks = [0, 1, 2, 3, 4].map((index) => Math.round((max / 4) * index * 100) / 100);
+  const band = innerWidth / data.length;
+  const barWidth = Math.max(4, Math.min(34, band * 0.68));
+  return (
+    <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={summary}>
+      {ticks.map((tick) => {
+        const y = margin.top + innerHeight - (tick / max) * innerHeight;
+        return (
+          <g key={tick}>
+            <line className="chart-grid" x1={margin.left} x2={width - margin.right} y1={y} y2={y} />
+            <text className="chart-axis" x={margin.left - 8} y={y + 5} textAnchor="end">{Number.isInteger(tick) ? tick : tick.toFixed(1)}</text>
+          </g>
+        );
+      })}
+      {data.map((item, index) => {
+        const barHeight = (item.value / max) * innerHeight;
+        const x = margin.left + index * band + (band - barWidth) / 2;
+        const y = margin.top + innerHeight - barHeight;
+        const isPeak = highlightMax && peak > 0 && item.value === peak;
+        return (
+          <g key={item.key}>
+            <rect className={`chart-bar${isPeak ? ' is-peak' : ''}`} x={x} y={y} width={barWidth} height={Math.max(barHeight, item.value ? 2 : 0)} rx="3">
+              <title>{`${item.tooltip}: ${item.value} ${item.value === 1 ? 'order' : 'orders'}`}</title>
+            </rect>
+            {index % labelEvery === 0 && <text className="chart-axis" x={x + barWidth / 2} y={height - 13} textAnchor="middle">{item.label}</text>}
+          </g>
+        );
+      })}
+      <line className="chart-baseline" x1={margin.left} x2={width - margin.right} y1={margin.top + innerHeight} y2={margin.top + innerHeight} />
+    </svg>
+  );
+}
+
+function RangeToggle({ options, value, onChange, label }) {
+  return (
+    <div className="chart-toggle" role="group" aria-label={label}>
+      {options.map((option) => <button key={option.value} type="button" className={value === option.value ? 'active' : ''} aria-pressed={value === option.value} onClick={() => onChange(option.value)}>{option.label}</button>)}
+    </div>
+  );
+}
+
+const dayKey = (date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+
+function OrdersPerDayChart({ orders }) {
+  const [days, setDays] = useState(7);
+  const { data, total } = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const buckets = Array.from({ length: days }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - (days - 1 - index));
+      return {
+        key: dayKey(date),
+        value: 0,
+        label: days === 7 ? date.toLocaleDateString('en-IN', { weekday: 'short' }) : `${date.getDate()}/${date.getMonth() + 1}`,
+        tooltip: date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }),
+      };
+    });
+    const lookup = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+    let count = 0;
+    orders.forEach((order) => {
+      const bucket = lookup.get(dayKey(new Date(order.createdAt)));
+      if (bucket) {
+        bucket.value += 1;
+        count += 1;
+      }
+    });
+    return { data: buckets, total: count };
+  }, [orders, days]);
+  const busiest = data.reduce((best, item) => (item.value > best.value ? item : best), { value: 0 });
+  const summary = `Orders per day over the last ${days} days. ${total} orders in total.`;
+  return (
+    <article className="owner-panel chart-card">
+      <div className="chart-heading">
+        <div><span className="eyebrow">ORDERS OVER TIME</span><h2>Orders per day</h2></div>
+        <RangeToggle label="Choose date range" value={days} onChange={setDays} options={[{ value: 7, label: 'Last 7 days' }, { value: 30, label: 'Last 30 days' }]} />
+      </div>
+      <BarChart data={data} summary={summary} labelEvery={days === 7 ? 1 : 5} />
+      <p className="chart-summary">
+        <strong>{total}</strong> {total === 1 ? 'order' : 'orders'} in the last {days} days
+        {total > 0 && <> · average <strong>{(total / days).toFixed(1)}</strong> a day · busiest day <strong>{busiest.tooltip}</strong> ({busiest.value})</>}
+        {total === 0 && <> · no orders in this period yet</>}
+      </p>
+    </article>
+  );
+}
+
+const hourLabel = (hour) => `${hour % 12 === 0 ? 12 : hour % 12}${hour < 12 ? 'am' : 'pm'}`;
+
+function PeakHoursChart({ orders }) {
+  const [range, setRange] = useState(30);
+  const { data, total } = useMemo(() => {
+    const buckets = Array.from({ length: 24 }, (_, hour) => ({
+      key: hour,
+      value: 0,
+      label: hourLabel(hour),
+      tooltip: `${hourLabel(hour)} to ${hourLabel((hour + 1) % 24)}`,
+    }));
+    const cutoff = range === 0 ? 0 : Date.now() - range * 24 * 60 * 60 * 1000;
+    let count = 0;
+    orders.forEach((order) => {
+      const created = new Date(order.createdAt);
+      if (created.getTime() >= cutoff) {
+        buckets[created.getHours()].value += 1;
+        count += 1;
+      }
+    });
+    return { data: buckets, total: count };
+  }, [orders, range]);
+  const peakValue = Math.max(0, ...data.map((item) => item.value));
+  const peakHours = data.filter((item) => peakValue > 0 && item.value === peakValue);
+  const rangeText = range === 0 ? 'all time' : `the last ${range} days`;
+  const summary = peakHours.length
+    ? `Orders by hour of the day for ${rangeText}. Peak hour: ${peakHours.map((item) => item.tooltip).join(', ')}.`
+    : `Orders by hour of the day for ${rangeText}. No orders yet.`;
+  return (
+    <article className="owner-panel chart-card">
+      <div className="chart-heading">
+        <div><span className="eyebrow">PEAK HOURS</span><h2>Orders by time of day</h2></div>
+        <RangeToggle label="Choose date range" value={range} onChange={setRange} options={[{ value: 7, label: '7 days' }, { value: 30, label: '30 days' }, { value: 0, label: 'All time' }]} />
+      </div>
+      <BarChart data={data} summary={summary} labelEvery={3} highlightMax />
+      <p className="chart-summary">
+        {peakHours.length > 0
+          ? <>Peak time: <strong>{peakHours.map((item) => item.tooltip).join(' and ')}</strong> with <strong>{peakValue}</strong> {peakValue === 1 ? 'order' : 'orders'} · {total} orders in {rangeText}</>
+          : <>No orders in {rangeText} yet. Peak hours will appear here after the first orders.</>}
+      </p>
+    </article>
+  );
+}
+
 function StatCard({ label, value, note }) {
   return <article className="stat-card"><span className="eyebrow">{label}</span><strong>{value}</strong><span>{note}</span></article>;
 }
@@ -1391,10 +1617,10 @@ function Footer({ variant }) {
         <Link className="brand footer-brand" to="/" aria-label="7th Sky home"><img className="brand-logo" src={brandLogo} alt="7th Sky" /></Link>
         <p>Come hungry.<br />Leave room for one more.</p>
         <div className="footer-links">
-          {variant === 'home' ? <><Link to="/#story">Our story <ArrowIcon /></Link><Link to="/#signature">The menu <ArrowIcon /></Link><Link to="/#order">How to order <ArrowIcon /></Link></> : <><Link to="/menu">Menu <ArrowIcon /></Link><Link to="/cart">Your cart <ArrowIcon /></Link></>}
+          {variant === 'home' ? <><Link to="/#signature">The menu <ArrowIcon /></Link><Link to="/#order">How to order <ArrowIcon /></Link></> : <><Link to="/menu">Menu <ArrowIcon /></Link><Link to="/cart">Your cart <ArrowIcon /></Link></>}
         </div>
       </div>
-      <div className="footer-bottom"><span>Copyright 2026 7th Sky</span><span>Orders saved on this device · Payment status set when your order is placed</span></div>
+      <div className="footer-bottom"><span>Copyright 2026 7th Sky</span><span>Live order tracking from any device</span></div>
     </footer>
   );
 }

@@ -1,55 +1,44 @@
 # 7th Sky Restaurant
 
-A responsive restaurant website built with React, Vite, and React Router.
+React + Vite website with an Express + SQLite server. Orders are stored in a real database,
+so the customer's phone, The Kitchen and the Owner desk all see the same live data.
 
-## Run locally
+## Run it
 
 ```sh
 npm install
 npm run dev
 ```
 
-Create a production bundle with `npm run build`; preview it with
-`npm run preview`.
+- Website: http://localhost:5173 (also reachable from phones on the same Wi-Fi at `http://<your-computer-ip>:5173`)
+- API: http://localhost:3001 (started automatically by `npm run dev`)
 
-## Website features
+Production: `npm run build` then `npm start` (Express serves the built site and the API on `PORT`).
 
-- Restaurant homepage with a full-width photo slideshow and ordering options.
-- Searchable Biriyani and Mandi menu with availability controls, quantities,
-  food photography, and a persistent cart.
-- Dine-in table selection through table QR codes, plus takeaway and delivery
-  ordering.
-- Customer checkout and order confirmation pages.
-- Separate kitchen and owner dashboards for order status, menu management,
-  and table QR code generation.
-- Menu, cart, chosen order type, table number, orders, and menu edits stored in
-  the current browser.
+## Staff logins
 
-## Restaurant identity and photographs
+Defaults (change them for a real restaurant by copying `.env.example` to `.env`):
 
-- The transparent wordmark at `public/images/restaurant/wordmark.png` is used
-  throughout the website.
-- The homepage slideshow uses the four supplied restaurant photographs listed
-  in `public/images/restaurant/README.md`.
-- The menu photographs and their dish matches are listed in
-  `public/images/menu/README.md`.
-- Menu items, categories, prices, descriptions, and image paths are maintained
-  in `src/data.js`.
+| Portal  | Username | Password   |
+| ------- | -------- | ---------- |
+| Kitchen | kitchen  | kitchen123 |
+| Owner   | owner    | owner123   |
 
-## Ordering and payment information
+## How orders work
 
-- Orders are saved in the current browser only. They are not shared with a
-  restaurant server or other devices.
-- Sign-in and role checks run in the browser and are not server-protected.
-- The in-app payment step marks takeaway and delivery orders as Paid when
-  placed. Dine-in orders remain Not Paid and are associated with their table.
-- Payment statuses are stored with browser-local orders; no external payment
-  provider or financial transaction is configured.
-- Payment QR codes are unavailable. Table QR codes only open the ordering page
-  with a table number.
-- No business address, phone number, opening hours, or social accounts have
-  been supplied for publication.
+- Dine-in (via the table QR code): placed straight away, payment status **Not Paid**.
+- Takeaway and delivery: customer picks card, UPI or QR and pays; the order is saved as **Paid**.
+- The Kitchen changes the status from a dropdown. The options depend on the order type:
+  - Dine-in: Placed, Preparing, Ready, Delivered, Completed
+  - Delivery: Placed, Preparing, Ready, On the way, Completed
+  - Takeaway: Placed, Preparing, Ready, At reception, Completed
+- The customer's order page (`/order/<order number>`, or **Track order** in the menu) refreshes every
+  4 seconds and shows the status (for example "At reception" shows as "Ready for pickup").
+- The Owner desk shows all orders read-only.
 
-Connect a secure backend, server-side authentication, shared order storage,
-verified payment processing, and the restaurant's confirmed contact details
-before using this website to accept live online orders.
+## Notes
+
+- The database file lives in `server/data/` (set `DATA_DIR` to use a different folder). When deploying,
+  use a host with a persistent disk, otherwise the file is wiped on each restart.
+- Payment is an in-app step only. No real payment gateway is connected, so no money is processed.
+- Menu edits made on the Owner desk are still stored in that browser only.

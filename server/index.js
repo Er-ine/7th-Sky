@@ -1,9 +1,11 @@
+import 'dotenv/config'; // ADDED: loads .env (NTFY_TOPIC, Twilio vars, etc.)
 import express from 'express';
 import Database from 'better-sqlite3';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { notifyOwner } from '../utils/notifyOwner.js'; // ADDED
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
@@ -250,6 +252,7 @@ app.post('/api/orders', route((req, res) => {
   if (attemptId) {
     const existing = selectOrderByAttempt.get(attemptId);
     if (existing) {
+      // Retried checkout: return the existing order, no new alert.
       res.json(shapeOrder(existing, { includePrivate: true }));
       return;
     }
@@ -313,7 +316,15 @@ app.post('/api/orders', route((req, res) => {
     updated_at: now,
   };
   createOrderTx(order, items);
-  res.status(201).json(shapeOrder(selectOrder.get(order.id), { includePrivate: true }));
+
+  const saved = shapeOrder(selectOrder.get(order.id), { includePrivate: true }); // ADDED
+
+  // ADDED: alert the owner about the new order (never blocks or breaks the response)
+  notifyOwner(saved).catch((err) =>
+    console.error('Order alert failed:', err.message)
+  );
+
+  res.status(201).json(saved); // CHANGED: uses `saved` (same data as before)
 }));
 
 app.get('/api/orders', requireRole('kitchen', 'owner'), route((req, res) => {

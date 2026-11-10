@@ -8,18 +8,17 @@
     "server": "node server/index.js",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "notify:test": "node server/notify-test.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",
-    "dotenv": "^18.0.9",
     "express": "^4.21.2",
-    "nodemailer": "^10.4.0",
+    "nodemailer": "^7.0.13",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.1.5",
-    "twilio": "^6.3.0"
+    "react-router-dom": "^7.1.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",

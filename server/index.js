@@ -1,11 +1,17 @@
-import 'dotenv/config'; // ADDED: loads .env (NTFY_TOPIC, Twilio vars, etc.)
 import express from 'express';
 import Database from 'better-sqlite3';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { notifyOwner } from '../utils/notifyOwner.js'; // ADDED
+import { notificationStatus, notifyNewOrder } from './notify.js';
+
+// Load .env (Node 20.12+/22+); the server still runs with defaults if there is no .env file.
+try {
+  process.loadEnvFile();
+} catch {
+  /* no .env file */
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
@@ -252,7 +258,6 @@ app.post('/api/orders', route((req, res) => {
   if (attemptId) {
     const existing = selectOrderByAttempt.get(attemptId);
     if (existing) {
-      // Retried checkout: return the existing order, no new alert.
       res.json(shapeOrder(existing, { includePrivate: true }));
       return;
     }
@@ -316,15 +321,9 @@ app.post('/api/orders', route((req, res) => {
     updated_at: now,
   };
   createOrderTx(order, items);
-
-  const saved = shapeOrder(selectOrder.get(order.id), { includePrivate: true }); // ADDED
-
-  // ADDED: alert the owner about the new order (never blocks or breaks the response)
-  notifyOwner(saved).catch((err) =>
-    console.error('Order alert failed:', err.message)
-  );
-
-  res.status(201).json(saved); // CHANGED: uses `saved` (same data as before)
+  const created = shapeOrder(selectOrder.get(order.id), { includePrivate: true });
+  notifyNewOrder(created).catch((error) => console.error('[notify] unexpected error:', error));
+  res.status(201).json(created);
 }));
 
 app.get('/api/orders', requireRole('kitchen', 'owner'), route((req, res) => {
@@ -376,4 +375,6 @@ app.use((error, req, res, next) => {
 
 app.listen(port, () => {
   console.log(`7th Sky server running on http://localhost:${port}`);
+  const channels = notificationStatus();
+  console.log(`Order alerts: ntfy ${channels.ntfy ? 'ON' : 'OFF'}, email ${channels.email ? 'ON' : 'OFF'}`);
 });

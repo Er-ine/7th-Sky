@@ -1,5 +1,6 @@
+from pathlib import Path
 
-import nodemailer from 'nodemailer';
+content = r'''import nodemailer from 'nodemailer';
 
 /* ---------- configuration ---------- */
 
@@ -20,14 +21,27 @@ function settings() {
     ntfyUrl,
     ntfyToken: pick('NTFY_TOKEN'),
 
-    emailUser: pick('EMAIL_USER', 'SMTP_USER'),
+    // ALERT_EMAIL_* are the names currently used in Render.
+    // The other names are retained for backward compatibility.
+    emailUser: pick(
+      'ALERT_EMAIL_USER',
+      'EMAIL_USER',
+      'SMTP_USER'
+    ),
+
     emailPass: pick(
+      'ALERT_EMAIL_PASS',
       'EMAIL_PASS',
       'EMAIL_PASSWORD',
       'SMTP_PASS'
     ).replace(/\s+/g, ''),
 
-    emailTo: pick('EMAIL_TO', 'NOTIFY_EMAIL'),
+    emailTo: pick(
+      'ALERT_EMAIL_TO',
+      'EMAIL_TO',
+      'NOTIFY_EMAIL'
+    ),
+
     emailHost: pick('EMAIL_HOST'),
     emailPort: Number(pick('EMAIL_PORT')) || 0,
     emailSecure: pick('EMAIL_SECURE') === 'true',
@@ -120,7 +134,6 @@ async function sendNtfy(config, order) {
     signal: AbortSignal.timeout(10000),
   });
 
-  // Read the complete response for diagnostics.
   const responseBody = await response.text();
 
   if (!response.ok) {
@@ -163,9 +176,6 @@ async function sendEmail(config, order) {
             user: config.emailUser,
             pass: config.emailPass,
           },
-          tls: {
-            rejectUnauthorized: false,
-          },
         }
       : {
           service: config.emailService,
@@ -177,7 +187,8 @@ async function sendEmail(config, order) {
   );
 
   await transport.sendMail({
-    from: `"7th Sky orders" <${config.emailUser}>`,
+    // Gmail authenticates the sender address; this sets its display name.
+    from: `"7th Sky Restaurant" <${config.emailUser}>`,
     to: config.emailTo,
     subject: `New order ${order.orderNumber} - ${where}`,
     text: `${body}\n\nOrder number: ${order.orderNumber}`,
@@ -231,3 +242,8 @@ export async function notifyNewOrder(order) {
     }
   });
 }
+'''
+
+path = Path("/mnt/data/notify.js")
+path.write_text(content, encoding="utf-8")
+print(f"Created {path} ({path.stat().st_size} bytes)")

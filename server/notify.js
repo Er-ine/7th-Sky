@@ -1,55 +1,52 @@
-from pathlib import Path
-
-content = r'''import nodemailer from 'nodemailer';
-
-/* ---------- configuration ---------- */
-
-const pick = (...names) =>
-  names.map((name) => (process.env[name] || '').trim()).find(Boolean) || '';
+import nodemailer from "nodemailer";
 
 function settings() {
-  const topic = pick('NTFY_TOPIC');
+  const emailUser =
+    process.env.ALERT_EMAIL_USER ||
+    process.env.EMAIL_USER ||
+    process.env.SMTP_USER ||
+    "";
 
-  const server = (pick('NTFY_SERVER') || 'https://ntfy.sh')
-    .replace(/\/+$/, '');
+  const emailPass =
+    process.env.ALERT_EMAIL_PASS ||
+    process.env.EMAIL_PASS ||
+    process.env.EMAIL_PASSWORD ||
+    process.env.SMTP_PASS ||
+    "";
 
-  const ntfyUrl =
-    pick('NTFY_URL') ||
-    (topic ? `${server}/${encodeURIComponent(topic)}` : '');
+  const emailTo =
+    process.env.ALERT_EMAIL_TO ||
+    process.env.EMAIL_TO ||
+    process.env.NOTIFY_EMAIL ||
+    "";
+
+  const emailService = process.env.EMAIL_SERVICE || "gmail";
+
+  const ntfyTopic = process.env.NTFY_TOPIC || "";
+  const ntfyUrl = process.env.NTFY_URL || "";
+  const ntfyServer = (
+    process.env.NTFY_SERVER || "https://ntfy.sh"
+  ).replace(/\/+$/, "");
+
+  const ntfyToken = process.env.NTFY_TOKEN || "";
+
+  let finalNtfyUrl = "";
+
+  if (ntfyUrl) {
+    finalNtfyUrl = ntfyUrl;
+  } else if (ntfyTopic) {
+    finalNtfyUrl = `${ntfyServer}/${ntfyTopic}`;
+  }
 
   return {
-    ntfyUrl,
-    ntfyToken: pick('NTFY_TOKEN'),
-
-    // ALERT_EMAIL_* are the names currently used in Render.
-    // The other names are retained for backward compatibility.
-    emailUser: pick(
-      'ALERT_EMAIL_USER',
-      'EMAIL_USER',
-      'SMTP_USER'
-    ),
-
-    emailPass: pick(
-      'ALERT_EMAIL_PASS',
-      'EMAIL_PASS',
-      'EMAIL_PASSWORD',
-      'SMTP_PASS'
-    ).replace(/\s+/g, ''),
-
-    emailTo: pick(
-      'ALERT_EMAIL_TO',
-      'EMAIL_TO',
-      'NOTIFY_EMAIL'
-    ),
-
-    emailHost: pick('EMAIL_HOST'),
-    emailPort: Number(pick('EMAIL_PORT')) || 0,
-    emailSecure: pick('EMAIL_SECURE') === 'true',
-    emailService: pick('EMAIL_SERVICE') || 'gmail',
+    emailUser,
+    emailPass,
+    emailTo,
+    emailService,
+    ntfyUrl: finalNtfyUrl,
+    ntfyToken,
   };
 }
-
-/* ---------- notification status ---------- */
 
 export function notificationStatus() {
   const config = settings();
@@ -64,186 +61,160 @@ export function notificationStatus() {
   };
 }
 
-/* ---------- order message ---------- */
+async function sendNtfy(order) {
+  const config = settings();
 
-const rupees = (value) =>
-  `Rs. ${Number(value).toLocaleString('en-IN')}`;
+  if (!config.ntfyUrl) {
+    return;
+  }
 
-function describe(order) {
-  const where =
-    order.orderType === 'dine-in'
-      ? `Dine-in, Table ${order.table}`
-      : order.orderType === 'delivery'
-        ? 'Delivery'
-        : 'Takeaway';
+  const orderId = order.orderId || order.id || "New Order";
 
-  const lines = order.items.map(
-    (item) => `${item.quantity} x ${item.name}`
-  );
+  const message = [
+    "New order received at 7th Sky!",
+    "",
+    `Order ID: ${orderId}`,
+    `Customer: ${order.customerName || "Customer"}`,
+    `Phone: ${order.phone || "Not provided"}`,
+    `Order Type: ${order.orderType || order.mode || "Not specified"}`,
+    `Total: ₹${order.total || 0}`,
+  ].join("\n");
 
-  const body = [
-    where,
-    ...lines,
-    `Total: ${rupees(order.subtotal)}`,
-    `Payment: ${order.paymentStatus}`,
+  const headers = {
+    "Content-Type": "text/plain; charset=utf-8",
+    Title: "7th Sky - New Order",
+    Priority: "high",
+    Tags: "bell,food",
+  };
 
-    order.orderType === 'dine-in'
-      ? ''
-      : `Customer: ${order.customerName} (${order.phone})`,
-
-    order.deliveryAddress
-      ? `Address: ${order.deliveryAddress}`
-      : '',
-
-    order.instructions
-      ? `Note: ${order.instructions}`
-      : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
-
-  return { where, body };
-}
-
-/* ---------- ntfy notification ---------- */
-
-async function sendNtfy(config, order) {
-  const { where, body } = describe(order);
-
-  console.log(
-    `[ntfy] Sending notification for order ${order.orderNumber}`
-  );
+  if (config.ntfyToken) {
+    headers.Authorization = `Bearer ${config.ntfyToken}`;
+  }
 
   const response = await fetch(config.ntfyUrl, {
-    method: 'POST',
-
-    headers: {
-      Title: `New order ${order.orderNumber} - ${where}`,
-      Priority: 'high',
-      Tags: 'bell',
-
-      ...(config.ntfyToken
-        ? {
-            Authorization: `Bearer ${config.ntfyToken}`,
-          }
-        : {}),
-    },
-
-    body,
-
-    signal: AbortSignal.timeout(10000),
+    method: "POST",
+    headers,
+    body: message,
   });
 
-  const responseBody = await response.text();
-
   if (!response.ok) {
-    const details = {
-      status: response.status,
-      statusText: response.statusText,
-      retryAfter: response.headers.get('retry-after'),
-      rateLimit: response.headers.get('ratelimit'),
-      rateLimitPolicy: response.headers.get('ratelimit-policy'),
-      response: responseBody,
-    };
-
-    console.error(
-      `[ntfy] FAILED for order ${order.orderNumber}:`,
-      details
-    );
+    const responseText = await response.text();
 
     throw new Error(
-      `ntfy replied ${response.status} ${response.statusText}: ${responseBody}`
+      `ntfy failed: ${response.status} ${response.statusText} - ${responseText}`
     );
   }
 
-  console.log(
-    `[ntfy] Successfully sent notification for order ${order.orderNumber}`
-  );
+  console.log(`[ntfy] Notification sent for order ${orderId}`);
 }
 
-/* ---------- email notification ---------- */
+async function sendEmail(order) {
+  const config = settings();
 
-async function sendEmail(config, order) {
-  const { where, body } = describe(order);
+  if (
+    !config.emailUser ||
+    !config.emailPass ||
+    !config.emailTo
+  ) {
+    return;
+  }
 
-  const transport = nodemailer.createTransport(
-    config.emailHost
-      ? {
-          host: config.emailHost,
-          port: config.emailPort || 587,
-          secure: config.emailSecure,
-          auth: {
-            user: config.emailUser,
-            pass: config.emailPass,
-          },
-        }
-      : {
-          service: config.emailService,
-          auth: {
-            user: config.emailUser,
-            pass: config.emailPass,
-          },
-        }
-  );
+  let transporter;
 
-  await transport.sendMail({
-    // Gmail authenticates the sender address; this sets its display name.
+  if (config.emailService.toLowerCase() === "gmail") {
+    transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: config.emailUser,
+        pass: config.emailPass,
+      },
+    });
+  } else {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: process.env.SMTP_SECURE === "true",
+      auth: {
+        user: config.emailUser,
+        pass: config.emailPass,
+      },
+    });
+  }
+
+  const orderId = order.orderId || order.id || "New Order";
+
+  const items = Array.isArray(order.items)
+    ? order.items
+        .map((item) => {
+          const name = item.name || item.itemName || "Item";
+          const quantity = item.quantity || 1;
+          const price = item.price || 0;
+
+          return `${name} x ${quantity} - ₹${price * quantity}`;
+        })
+        .join("\n")
+    : "Order items unavailable";
+
+  const total = order.total || 0;
+
+  const mailOptions = {
     from: `"7th Sky Restaurant" <${config.emailUser}>`,
     to: config.emailTo,
-    subject: `New order ${order.orderNumber} - ${where}`,
-    text: `${body}\n\nOrder number: ${order.orderNumber}`,
-  });
+    subject: `New Order Received - ${orderId}`,
+    text: `
+A new order has been received at 7th Sky Restaurant.
+
+ORDER DETAILS
+----------------------------
+
+Order ID: ${orderId}
+Customer: ${order.customerName || "Not provided"}
+Phone: ${order.phone || "Not provided"}
+Order Type: ${order.orderType || order.mode || "Not specified"}
+
+ITEMS
+----------------------------
+
+${items}
+
+----------------------------
+Total Amount: ₹${total}
+
+Please check the 7th Sky kitchen dashboard for the complete order details.
+`,
+  };
+
+  await transporter.sendMail(mailOptions);
+
+  console.log(`[email] Notification sent for order ${orderId}`);
 }
-
-/* ---------- main notification handler ---------- */
-
-/*
-  Never blocks order placement.
-  Notification failures are logged separately.
-*/
 
 export async function notifyNewOrder(order) {
   const config = settings();
   const status = notificationStatus();
 
   if (!status.ntfy && !status.email) {
-    console.warn(
-      `[notify] No notification channel configured for order ${order.orderNumber}`
-    );
+    console.warn("[notify] No notification channel is configured.");
     return;
   }
 
-  const jobs = [];
+  const tasks = [];
 
   if (status.ntfy) {
-    jobs.push(['ntfy', sendNtfy(config, order)]);
+    tasks.push(
+      sendNtfy(order).catch((error) => {
+        console.error("[ntfy] FAILED:", error.message);
+      })
+    );
   }
 
   if (status.email) {
-    jobs.push(['email', sendEmail(config, order)]);
+    tasks.push(
+      sendEmail(order).catch((error) => {
+        console.error("[email] FAILED:", error.message);
+      })
+    );
   }
 
-  const results = await Promise.allSettled(
-    jobs.map(([, job]) => job)
-  );
-
-  results.forEach((result, index) => {
-    const channel = jobs[index][0];
-
-    if (result.status === 'fulfilled') {
-      console.log(
-        `[notify] ${channel} sent for order ${order.orderNumber}`
-      );
-    } else {
-      console.error(
-        `[notify] ${channel} FAILED for order ${order.orderNumber}:`,
-        result.reason?.message || result.reason
-      );
-    }
-  });
+  await Promise.allSettled(tasks);
 }
-'''
-
-path = Path("/mnt/data/notify.js")
-path.write_text(content, encoding="utf-8")
-print(f"Created {path} ({path.stat().st_size} bytes)")
